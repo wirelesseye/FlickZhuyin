@@ -40,20 +40,23 @@ final class KeyboardViewController: UIInputViewController {
             if index == 1 {
                 rowStack.layoutMargins = UIEdgeInsets(top: 0, left: 14, bottom: 0, right: 14)
                 rowStack.isLayoutMarginsRelativeArrangement = true
-            } else if index == 2 {
-                rowStack.layoutMargins = UIEdgeInsets(top: 0, left: 28, bottom: 0, right: 28)
-                rowStack.isLayoutMarginsRelativeArrangement = true
             }
-            row.forEach { rowStack.addArrangedSubview(makeButton(for: $0)) }
+            let keys = index == 2 ? KeyboardLayout.thirdRow : row
+            keys.forEach { rowStack.addArrangedSubview(makeButton(for: $0)) }
             keyboardStack.addArrangedSubview(rowStack)
         }
 
-        let controlStack = makeRow()
+        let controlStack = makeControlRow()
         for key in KeyboardLayout.controlRow {
             let button = makeButton(for: key)
             controlStack.addArrangedSubview(button)
-            if key == .space {
-                button.widthAnchor.constraint(greaterThanOrEqualTo: controlStack.widthAnchor, multiplier: 0.34).isActive = true
+            switch key {
+            case .nextKeyboard:
+                button.widthAnchor.constraint(equalToConstant: 52).isActive = true
+            case .return:
+                button.widthAnchor.constraint(equalToConstant: 92).isActive = true
+            default:
+                break
             }
         }
         keyboardStack.addArrangedSubview(controlStack)
@@ -64,6 +67,14 @@ final class KeyboardViewController: UIInputViewController {
         stack.axis = .horizontal
         stack.spacing = 6
         stack.distribution = .fillEqually
+        return stack
+    }
+
+    private func makeControlRow() -> UIStackView {
+        let stack = UIStackView()
+        stack.axis = .horizontal
+        stack.spacing = 6
+        stack.distribution = .fill
         return stack
     }
 
@@ -109,7 +120,8 @@ final class KeyboardViewController: UIInputViewController {
                 button.setImage(UIImage(systemName: symbol), for: .normal)
                 button.tintColor = engine.letterCase == .lowercase ? .label : .systemBlue
             case .delete:
-                button.setImage(UIImage(systemName: "delete.left"), for: .normal)
+                button.setImage(UIImage(systemName: "delete.left.fill"), for: .normal)
+                button.tintColor = .label
             case .space:
                 button.setTitle("space", for: .normal)
                 button.titleLabel?.font = .systemFont(ofSize: 15)

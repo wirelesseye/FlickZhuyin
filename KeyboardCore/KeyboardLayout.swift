@@ -7,7 +7,11 @@ enum KeyboardLayout {
         Array("zxcvbnm").map(KeyboardKey.letter)
     ]
 
+    static var thirdRow: [KeyboardKey] {
+        [.shift] + letterRows[2] + [.delete]
+    }
+
     static let controlRow: [KeyboardKey] = [
-        .shift, .nextKeyboard, .space, .delete, .return
+        .nextKeyboard, .space, .return
     ]
 }

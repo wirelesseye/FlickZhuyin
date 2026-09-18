@@ -3,7 +3,8 @@ import XCTest
 final class KeyboardEngineTests: XCTestCase {
     func testQWERTYLayout() {
         XCTAssertEqual(KeyboardLayout.letterRows.map(letters), ["qwertyuiop", "asdfghjkl", "zxcvbnm"])
-        XCTAssertEqual(KeyboardLayout.controlRow, [.shift, .nextKeyboard, .space, .delete, .return])
+        XCTAssertEqual(KeyboardLayout.thirdRow, [.shift] + KeyboardLayout.letterRows[2] + [.delete])
+        XCTAssertEqual(KeyboardLayout.controlRow, [.nextKeyboard, .space, .return])
     }
 
     func testSingleShiftAppliesToOneLetter() {
