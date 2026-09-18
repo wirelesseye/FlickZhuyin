@@ -38,6 +38,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func buildABCKeyboard() {
         let keyboardStack = pinnedVerticalStack(spacing: 8)
+        keyboardStack.distribution = .fillEqually
         for (index, row) in KeyboardLayout.letterRows.enumerated() {
             let rowStack = makeRow()
             if index == 1 {
