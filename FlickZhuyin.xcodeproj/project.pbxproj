@@ -50,6 +50,16 @@
 		A1000000000000000000002A /* Rime LICENSE in App Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000011 /* Rime LICENSE */; };
 		A1000000000000000000002B /* Rime LICENSE in Extension Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000011 /* Rime LICENSE */; };
 		A1000000000000000000002C /* Dictionary LICENSE.md in Extension Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000012 /* Dictionary LICENSE.md */; };
+		A1000000000000000000002D /* DecodedCandidate.swift in Extension Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000013 /* DecodedCandidate.swift */; };
+		A1000000000000000000002E /* DecoderTransition.swift in Extension Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000014 /* DecoderTransition.swift */; };
+		A1000000000000000000002F /* DecoderScorer.swift in Extension Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000015 /* DecoderScorer.swift */; };
+		A10000000000000000000030 /* Decoder.swift in Extension Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000016 /* Decoder.swift */; };
+		A10000000000000000000031 /* DecodedCandidate.swift in Test Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000013 /* DecodedCandidate.swift */; };
+		A10000000000000000000032 /* DecoderTransition.swift in Test Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000014 /* DecoderTransition.swift */; };
+		A10000000000000000000033 /* DecoderScorer.swift in Test Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000015 /* DecoderScorer.swift */; };
+		A10000000000000000000034 /* Decoder.swift in Test Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000016 /* Decoder.swift */; };
+		A10000000000000000000035 /* DecoderTests.swift in Test Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000017 /* DecoderTests.swift */; };
+		A10000000000000000000036 /* DecoderPerformanceTests.swift in Test Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000018 /* DecoderPerformanceTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -104,6 +114,12 @@
 		B1000000000000000000000D /* ProductionDictionaryIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductionDictionaryIntegrationTests.swift; sourceTree = "<group>"; };
 		B1000000000000000000000E /* ChineseInputPerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChineseInputPerformanceTests.swift; sourceTree = "<group>"; };
 		B1000000000000000000000F /* ThirdPartyLicensesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThirdPartyLicensesView.swift; sourceTree = "<group>"; };
+		B10000000000000000000013 /* DecodedCandidate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DecodedCandidate.swift; sourceTree = "<group>"; };
+		B10000000000000000000014 /* DecoderTransition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DecoderTransition.swift; sourceTree = "<group>"; };
+		B10000000000000000000015 /* DecoderScorer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DecoderScorer.swift; sourceTree = "<group>"; };
+		B10000000000000000000016 /* Decoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Decoder.swift; sourceTree = "<group>"; };
+		B10000000000000000000017 /* DecoderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DecoderTests.swift; sourceTree = "<group>"; };
+		B10000000000000000000018 /* DecoderPerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DecoderPerformanceTests.swift; sourceTree = "<group>"; };
 		B10000000000000000000010 /* THIRD_PARTY_NOTICES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = THIRD_PARTY_NOTICES.md; sourceTree = SOURCE_ROOT; };
 		B10000000000000000000011 /* Rime LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; name = "Rime-LGPL-3.0.txt"; path = Vendor/rime-terra-pinyin/LICENSE; sourceTree = SOURCE_ROOT; };
 		B10000000000000000000012 /* Dictionary LICENSE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = LICENSE.md; sourceTree = "<group>"; };
@@ -132,9 +148,9 @@
 		D10000000000000000000002 /* FlickZhuyinApp */ = {isa = PBXGroup; children = (B00000000000000000000001, B00000000000000000000002, B1000000000000000000000F /* ThirdPartyLicensesView.swift */, ); path = FlickZhuyinApp; sourceTree = "<group>"; };
 		D10000000000000000000003 /* FlickZhuyinKeyboard */ = {isa = PBXGroup; children = (B00000000000000000000003, B00000000000000000000004, B0000000000000000000000D, B00000000000000000000008, ); path = FlickZhuyinKeyboard; sourceTree = "<group>"; };
 		D10000000000000000000004 /* KeyboardCore */ = {isa = PBXGroup; children = (B00000000000000000000005, B00000000000000000000006, B00000000000000000000007, B0000000000000000000000E, D10000000000000000000007 /* ChineseInput */, ); path = KeyboardCore; sourceTree = "<group>"; };
-		D10000000000000000000005 /* FlickZhuyinTests */ = {isa = PBXGroup; children = (B0000000000000000000000A, B1000000000000000000000C, B1000000000000000000000D, B1000000000000000000000E, D10000000000000000000009 /* Fixtures */, ); path = FlickZhuyinTests; sourceTree = "<group>"; };
+		D10000000000000000000005 /* FlickZhuyinTests */ = {isa = PBXGroup; children = (B0000000000000000000000A, B1000000000000000000000C, B1000000000000000000000D, B1000000000000000000000E, B10000000000000000000017 /* DecoderTests.swift */, B10000000000000000000018 /* DecoderPerformanceTests.swift */, D10000000000000000000009 /* Fixtures */, ); path = FlickZhuyinTests; sourceTree = "<group>"; };
 		D10000000000000000000006 /* Products */ = {isa = PBXGroup; children = (B0000000000000000000000B, B00000000000000000000009, B0000000000000000000000C, ); name = Products; sourceTree = "<group>"; };
-		D10000000000000000000007 /* ChineseInput */ = {isa = PBXGroup; children = (B10000000000000000000001, B10000000000000000000002, B10000000000000000000003, B10000000000000000000004, B10000000000000000000005, B10000000000000000000006, B10000000000000000000007, B10000000000000000000008, ); path = ChineseInput; sourceTree = "<group>"; };
+		D10000000000000000000007 /* ChineseInput */ = {isa = PBXGroup; children = (B10000000000000000000001, B10000000000000000000002, B10000000000000000000003, B10000000000000000000004, B10000000000000000000005, B10000000000000000000006, B10000000000000000000007, B10000000000000000000008, B10000000000000000000013 /* DecodedCandidate.swift */, B10000000000000000000014 /* DecoderTransition.swift */, B10000000000000000000015 /* DecoderScorer.swift */, B10000000000000000000016 /* Decoder.swift */, ); path = ChineseInput; sourceTree = "<group>"; };
 		D10000000000000000000008 /* Generated */ = {isa = PBXGroup; children = (B10000000000000000000009, B10000000000000000000012 /* Dictionary LICENSE.md */, ); path = Generated; sourceTree = "<group>"; };
 		D10000000000000000000009 /* Fixtures */ = {isa = PBXGroup; children = (B1000000000000000000000A, ); path = Fixtures; sourceTree = "<group>"; };
 		D1000000000000000000000A /* Frameworks */ = {isa = PBXGroup; children = (B1000000000000000000000B, ); name = Frameworks; sourceTree = "<group>"; };
@@ -210,8 +226,8 @@
 
 /* Begin PBXSourcesBuildPhase section */
 		F20000000000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000001, A00000000000000000000002, A10000000000000000000027 /* ThirdPartyLicensesView.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
-		F20000000000000000000002 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000003, A00000000000000000000004, A00000000000000000000005, A00000000000000000000006, A00000000000000000000007, A0000000000000000000000D, A0000000000000000000000E, A10000000000000000000001, A10000000000000000000002, A10000000000000000000003, A10000000000000000000004, A10000000000000000000005, A10000000000000000000006, A10000000000000000000007, A10000000000000000000008, ); runOnlyForDeploymentPostprocessing = 0; };
-		F20000000000000000000003 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000009, A0000000000000000000000A, A0000000000000000000000B, A0000000000000000000000C, A0000000000000000000000F, A10000000000000000000011, A10000000000000000000012, A10000000000000000000013, A10000000000000000000014, A10000000000000000000015, A10000000000000000000016, A10000000000000000000017, A10000000000000000000018, A10000000000000000000024, A10000000000000000000025, A10000000000000000000026, ); runOnlyForDeploymentPostprocessing = 0; };
+		F20000000000000000000002 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000003, A00000000000000000000004, A00000000000000000000005, A00000000000000000000006, A00000000000000000000007, A0000000000000000000000D, A0000000000000000000000E, A10000000000000000000001, A10000000000000000000002, A10000000000000000000003, A10000000000000000000004, A10000000000000000000005, A10000000000000000000006, A10000000000000000000007, A10000000000000000000008, A1000000000000000000002D, A1000000000000000000002E, A1000000000000000000002F, A10000000000000000000030, ); runOnlyForDeploymentPostprocessing = 0; };
+		F20000000000000000000003 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000009, A0000000000000000000000A, A0000000000000000000000B, A0000000000000000000000C, A0000000000000000000000F, A10000000000000000000011, A10000000000000000000012, A10000000000000000000013, A10000000000000000000014, A10000000000000000000015, A10000000000000000000016, A10000000000000000000017, A10000000000000000000018, A10000000000000000000024, A10000000000000000000025, A10000000000000000000026, A10000000000000000000031, A10000000000000000000032, A10000000000000000000033, A10000000000000000000034, A10000000000000000000035, A10000000000000000000036, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */

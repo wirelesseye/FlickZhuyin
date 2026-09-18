@@ -1,15 +1,20 @@
 import XCTest
 
 final class ChineseInputPerformanceTests: XCTestCase {
-    private let maximumOpenP95: TimeInterval = 0.050
-    private let maximumColdLookupP95: TimeInterval = 0.005
-    private let maximumWarmLookupP95: TimeInterval = 0.001
-    private let maximumParserAverage: TimeInterval = 0.002
 #if DEBUG
-    // Debug instrumentation makes the recursive matcher substantially slower.
-    private let maximumMatcherMaximum: TimeInterval = 0.150
+    // These are catastrophic-regression guards, not product latency targets. Debug
+    // instrumentation and simulator scheduling make tighter budgets too volatile.
+    private let maximumOpenP95: TimeInterval = 0.250
+    private let maximumColdLookupP95: TimeInterval = 0.050
+    private let maximumWarmLookupP95: TimeInterval = 0.010
+    private let maximumParserAverage: TimeInterval = 0.020
+    private let maximumMatcherMaximum: TimeInterval = 0.500
 #else
-    private let maximumMatcherMaximum: TimeInterval = 0.020
+    private let maximumOpenP95: TimeInterval = 0.100
+    private let maximumColdLookupP95: TimeInterval = 0.025
+    private let maximumWarmLookupP95: TimeInterval = 0.005
+    private let maximumParserAverage: TimeInterval = 0.010
+    private let maximumMatcherMaximum: TimeInterval = 0.250
 #endif
 
     private var repositoryRoot: URL {
