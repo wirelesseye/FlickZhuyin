@@ -1,6 +1,6 @@
 import UIKit
 
-final class KeyboardButton: UIButton {
+class KeyboardButton: UIButton {
     var normalColor: UIColor = .secondarySystemBackground {
         didSet { updateAppearance() }
     }

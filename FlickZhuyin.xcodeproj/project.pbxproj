@@ -18,6 +18,9 @@
 		A0000000000000000000000A /* KeyboardKey.swift in Test Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000005 /* KeyboardKey.swift */; };
 		A0000000000000000000000B /* KeyboardLayout.swift in Test Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000006 /* KeyboardLayout.swift */; };
 		A0000000000000000000000C /* KeyboardEngine.swift in Test Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000007 /* KeyboardEngine.swift */; };
+		A0000000000000000000000D /* FlickKeyButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000000D /* FlickKeyButton.swift */; };
+		A0000000000000000000000E /* ZhuyinLayout.swift in Extension Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000000E /* ZhuyinLayout.swift */; };
+		A0000000000000000000000F /* ZhuyinLayout.swift in Test Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000000E /* ZhuyinLayout.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -55,6 +58,8 @@
 		B0000000000000000000000A /* KeyboardEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardEngineTests.swift; sourceTree = "<group>"; };
 		B0000000000000000000000B /* FlickZhuyin.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FlickZhuyin.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B0000000000000000000000C /* FlickZhuyinTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FlickZhuyinTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B0000000000000000000000D /* FlickKeyButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlickKeyButton.swift; sourceTree = "<group>"; };
+		B0000000000000000000000E /* ZhuyinLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZhuyinLayout.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -76,8 +81,8 @@
 			sourceTree = "<group>";
 		};
 		D10000000000000000000002 /* FlickZhuyinApp */ = {isa = PBXGroup; children = (B00000000000000000000001, B00000000000000000000002, ); path = FlickZhuyinApp; sourceTree = "<group>"; };
-		D10000000000000000000003 /* FlickZhuyinKeyboard */ = {isa = PBXGroup; children = (B00000000000000000000003, B00000000000000000000004, B00000000000000000000008, ); path = FlickZhuyinKeyboard; sourceTree = "<group>"; };
-		D10000000000000000000004 /* KeyboardCore */ = {isa = PBXGroup; children = (B00000000000000000000005, B00000000000000000000006, B00000000000000000000007, ); path = KeyboardCore; sourceTree = "<group>"; };
+		D10000000000000000000003 /* FlickZhuyinKeyboard */ = {isa = PBXGroup; children = (B00000000000000000000003, B00000000000000000000004, B0000000000000000000000D, B00000000000000000000008, ); path = FlickZhuyinKeyboard; sourceTree = "<group>"; };
+		D10000000000000000000004 /* KeyboardCore */ = {isa = PBXGroup; children = (B00000000000000000000005, B00000000000000000000006, B00000000000000000000007, B0000000000000000000000E, ); path = KeyboardCore; sourceTree = "<group>"; };
 		D10000000000000000000005 /* FlickZhuyinTests */ = {isa = PBXGroup; children = (B0000000000000000000000A, ); path = FlickZhuyinTests; sourceTree = "<group>"; };
 		D10000000000000000000006 /* Products */ = {isa = PBXGroup; children = (B0000000000000000000000B, B00000000000000000000009, B0000000000000000000000C, ); name = Products; sourceTree = "<group>"; };
 /* End PBXGroup section */
@@ -152,8 +157,8 @@
 
 /* Begin PBXSourcesBuildPhase section */
 		F20000000000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000001, A00000000000000000000002, ); runOnlyForDeploymentPostprocessing = 0; };
-		F20000000000000000000002 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000003, A00000000000000000000004, A00000000000000000000005, A00000000000000000000006, A00000000000000000000007, ); runOnlyForDeploymentPostprocessing = 0; };
-		F20000000000000000000003 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000009, A0000000000000000000000A, A0000000000000000000000B, A0000000000000000000000C, ); runOnlyForDeploymentPostprocessing = 0; };
+		F20000000000000000000002 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000003, A00000000000000000000004, A00000000000000000000005, A00000000000000000000006, A00000000000000000000007, A0000000000000000000000D, A0000000000000000000000E, ); runOnlyForDeploymentPostprocessing = 0; };
+		F20000000000000000000003 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000009, A0000000000000000000000A, A0000000000000000000000B, A0000000000000000000000C, A0000000000000000000000F, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */

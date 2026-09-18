@@ -27,7 +27,7 @@
 			<key>IsASCIICapable</key>
 			<true/>
 			<key>PrimaryLanguage</key>
-			<string>en-US</string>
+			<string>zh-Hant</string>
 			<key>RequestsOpenAccess</key>
 			<false/>
 		</dict>
