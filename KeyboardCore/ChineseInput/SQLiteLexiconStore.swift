@@ -5,17 +5,24 @@ private let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self
 
 final class SQLiteLexiconStore: LexiconStore, @unchecked Sendable {
     static let defaultCacheCapacity = 256
-    static let schemaVersion: Int64 = 1
+    static let schemaVersion: Int64 = 2
     static let requiredMetadataKeys = [
         "schema_version",
-        "source_repository",
-        "source_commit",
-        "source_sha256",
+        "terra_source_repository",
+        "terra_source_commit",
+        "terra_source_sha256",
+        "essay_source_repository",
+        "essay_source_commit",
+        "essay_source_sha256",
         "dictionary_name",
         "dictionary_version",
         "compiler_version",
         "entry_count",
         "max_syllable_count",
+        "essay_entry_count",
+        "essay_annotated_entry_count",
+        "essay_frequency_max",
+        "weight_normalization",
     ]
 
     private let queue = DispatchQueue(label: "com.wirelesseye.FlickZhuyin.SQLiteLexiconStore")

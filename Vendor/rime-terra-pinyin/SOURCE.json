@@ -3,6 +3,8 @@
   "commit": "8a2c895ad7ee8e2b137d91be77f18f86b04d7fc9",
   "dictionaryPath": "terra_pinyin.dict.yaml",
   "sha256": "731f20c1431b77dbb4834b1a8b3bb30b7ddd65d9c6f05531eaf53da0b49a10c8",
+  "licensePath": "LICENSE",
+  "licenseSha256": "da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768",
   "dictionaryVersion": "2026.07.17",
-  "retrievedAt": "2026-09-18T11:35:16Z"
+  "retrievedAt": "2026-09-18T15:28:22Z"
 }

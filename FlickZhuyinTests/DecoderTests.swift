@@ -602,28 +602,54 @@ final class DecoderProductionIntegrationTests: XCTestCase {
         return try Decoder().decode(syllableLattice: syllableLattice, wordLattice: wordLattice)
     }
 
-    func testZhuyinCompositionIsBeyondBaselineTopTen() throws {
-        // The minimized Terra dictionary stores 注 and 音 as separate unweighted entries;
-        // 注音 itself is part of Rime's preset vocabulary, which this project does not vendor.
-        // With the baseline scorer the two-segment composition costs 16.5, below the many
-        // unweighted single-character readings of ㄓㄨˋ, so it is not in the default top 10.
-        // The fixture dictionary covers the weighted single-word path instead.
-        let store = try SQLiteLexiconStore(url: databaseURL)
-        XCTAssertTrue(
-            try store.exactMatches(for: [SyllableConstraint(base: "ㄓㄨ", tone: .fourth)])
-                .contains { $0.text == "注" && $0.sourceWeight == nil }
-        )
-        XCTAssertTrue(
-            try store.exactMatches(for: [SyllableConstraint(base: "ㄧㄣ", tone: .first)])
-                .contains { $0.text == "音" && $0.sourceWeight == nil }
-        )
+    private func tokens(_ symbols: String, tones: [MandarinTone?] = []) -> [ZhuyinInputToken] {
+        var result: [ZhuyinInputToken] = symbols.map { .symbol($0) }
+        for tone in tones {
+            if let tone {
+                result.append(.tone(tone))
+            }
+        }
+        return result
+    }
+
+    func testZhuyinWordAppearsWithExplicitTones() throws {
         let tokens: [ZhuyinInputToken] = [
             .symbol("ㄓ"), .symbol("ㄨ"), .tone(.fourth), .symbol("ㄧ"), .symbol("ㄣ"), .tone(.first),
         ]
         let candidates = try decode(tokens)
-        XCTAssertFalse(candidates.contains { $0.text == "注音" })
-        XCTAssertEqual(candidates.count, 10)
-        XCTAssertTrue(candidates.allSatisfy { $0.score.isFinite })
+        XCTAssertLessThanOrEqual(candidates.count, 10)
+        let zhuyin = try XCTUnwrap(candidates.first { $0.text == "注音" })
+        XCTAssertEqual(zhuyin.pronunciation, [
+            SyllableConstraint(base: "ㄓㄨ", tone: .fourth),
+            SyllableConstraint(base: "ㄧㄣ", tone: .first),
+        ])
+        XCTAssertEqual(zhuyin.segments.count, 1)
+        guard case .word? = zhuyin.segments.first else {
+            return XCTFail("expected 注音 to come from a dictionary word edge")
+        }
+        XCTAssertEqual(candidates, try decode(tokens))
+    }
+
+    func testTonelessInputContainsZhuyinWord() throws {
+        let candidates = try decode(tokens("ㄓㄨㄧㄣ"))
+        XCTAssertLessThanOrEqual(candidates.count, 10)
+        XCTAssertTrue(candidates.contains { $0.text == "注音" })
+        XCTAssertEqual(candidates, try decode(tokens("ㄓㄨㄧㄣ")))
+    }
+
+    func testRawFallbackRemainsAvailable() throws {
+        let candidates = try decode(tokens("ㄅㄆ"))
+        XCTAssertFalse(candidates.isEmpty)
+        XCTAssertTrue(
+            candidates.allSatisfy { candidate in
+                candidate.segments.contains { segment in
+                    if case .raw = segment {
+                        return true
+                    }
+                    return false
+                }
+            }
+        )
     }
 
     func testTonelessInputStaysBoundedAndFinite() throws {

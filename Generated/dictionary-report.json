@@ -1,21 +1,156 @@
 {
   "sourceEntries": 99329,
-  "compiledEntries": 99328,
+  "compiledEntries": 810303,
+  "terraCompiledEntries": 99328,
   "duplicateEntries": 1,
-  "distinctWords": 91062,
+  "duplicateEssayEntries": 3,
+  "duplicatePronunciations": 0,
+  "mergedTerraEssayEntries": 75993,
+  "essayEntries": 442689,
+  "essayMergedEntries": 442686,
+  "essayAnnotatedEntries": 442645,
+  "essayExplicitEntries": 70356,
+  "essayComposedEntries": 372289,
+  "essayUnannotatedEntries": 40,
+  "essayOversizedEntries": 1,
+  "essayTruncatedEntries": 1497,
+  "generatedPronunciations": 786968,
+  "distinctWords": 463351,
   "distinctPinyinSyllables": 421,
   "distinctZhuyinSyllables": 419,
-  "maxSyllableCount": 15,
-  "weightedEntries": 1598,
+  "maxSyllableCount": 16,
+  "weightedEntries": 786968,
+  "essayWeightedEntries": 786968,
+  "normalization": {
+    "formula": "log1p(frequency)/log1p(max_frequency)",
+    "maximumFrequency": 4822928
+  },
+  "database": {
+    "bytes": 138969088,
+    "limitBytes": 268435456
+  },
   "errors": [],
   "duplicateWeightConflicts": [],
-  "source": {
-    "path": "Vendor/rime-terra-pinyin/terra_pinyin.dict.yaml",
-    "sha256": "731f20c1431b77dbb4834b1a8b3bb30b7ddd65d9c6f05531eaf53da0b49a10c8",
-    "dictionaryName": "terra_pinyin",
-    "dictionaryVersion": "2026.07.17",
-    "sort": "by_weight",
-    "usePresetVocabulary": "true"
+  "unannotatedExamples": [
+    {
+      "text": "䱽",
+      "essaySourceLine": 138,
+      "missingCharacters": "䱽"
+    },
+    {
+      "text": "们",
+      "essaySourceLine": 30102,
+      "missingCharacters": "们"
+    },
+    {
+      "text": "凱茜·弗里曼",
+      "essaySourceLine": 55517,
+      "missingCharacters": "·"
+    },
+    {
+      "text": "動Ｌ",
+      "essaySourceLine": 65182,
+      "missingCharacters": "Ｌ"
+    },
+    {
+      "text": "卡拉ＯＫ",
+      "essaySourceLine": 71304,
+      "missingCharacters": "ＯＫ"
+    },
+    {
+      "text": "吗",
+      "essaySourceLine": 82474,
+      "missingCharacters": "吗"
+    },
+    {
+      "text": "呗",
+      "essaySourceLine": 84060,
+      "missingCharacters": "呗"
+    },
+    {
+      "text": "喬修亞·吉爾菲艾斯",
+      "essaySourceLine": 90048,
+      "missingCharacters": "·"
+    }
+  ],
+  "truncatedExamples": [
+    {
+      "text": "一一映射",
+      "essaySourceLine": 162,
+      "retained": 16,
+      "limit": 16
+    },
+    {
+      "text": "一一比對",
+      "essaySourceLine": 163,
+      "retained": 16,
+      "limit": 16
+    },
+    {
+      "text": "一上一下",
+      "essaySourceLine": 176,
+      "retained": 16,
+      "limit": 16
+    },
+    {
+      "text": "一不一樣",
+      "essaySourceLine": 209,
+      "retained": 16,
+      "limit": 16
+    },
+    {
+      "text": "一人一邊",
+      "essaySourceLine": 330,
+      "retained": 16,
+      "limit": 16
+    },
+    {
+      "text": "一人一間",
+      "essaySourceLine": 331,
+      "retained": 16,
+      "limit": 16
+    },
+    {
+      "text": "一代不如一代",
+      "essaySourceLine": 359,
+      "retained": 16,
+      "limit": 16
+    },
+    {
+      "text": "一個一個",
+      "essaySourceLine": 438,
+      "retained": 16,
+      "limit": 16
+    }
+  ],
+  "oversizedExamples": [
+    {
+      "text": "充滿希望的跋涉比到達目的地更能給人樂趣",
+      "essaySourceLine": 45243,
+      "length": 19
+    }
+  ],
+  "sources": {
+    "terra": {
+      "path": "terra_pinyin.dict.yaml",
+      "sha256": "731f20c1431b77dbb4834b1a8b3bb30b7ddd65d9c6f05531eaf53da0b49a10c8",
+      "repository": "https://github.com/rime/rime-terra-pinyin",
+      "commit": "8a2c895ad7ee8e2b137d91be77f18f86b04d7fc9",
+      "dictionaryName": "terra_pinyin",
+      "dictionaryVersion": "2026.07.17",
+      "sort": "by_weight",
+      "usePresetVocabulary": "true"
+    },
+    "essay": {
+      "path": "essay.txt",
+      "sha256": "e62fb950175ff5c33bff4480a8d96f7b4fa83e9a9420d32a596877aa61257ead",
+      "repository": "https://github.com/rime/rime-essay",
+      "commit": "e2652ea18609a879eae3e87db5d25b7fbc1a4f93",
+      "formatVersion": "1",
+      "entryCount": 442689,
+      "frequencyMax": 4822928
+    }
   },
-  "compilerVersion": "1"
+  "compilerVersion": "2",
+  "schemaVersion": 2
 }

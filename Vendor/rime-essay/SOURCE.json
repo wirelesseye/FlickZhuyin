@@ -1,0 +1,12 @@
+{
+  "repository": "https://github.com/rime/rime-essay",
+  "commit": "e2652ea18609a879eae3e87db5d25b7fbc1a4f93",
+  "essayPath": "essay.txt",
+  "sha256": "e62fb950175ff5c33bff4480a8d96f7b4fa83e9a9420d32a596877aa61257ead",
+  "licensePath": "LICENSE",
+  "licenseSha256": "da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768",
+  "formatVersion": 1,
+  "entryCount": 442689,
+  "frequencyMax": 4822928,
+  "retrievedAt": "2026-09-18T15:28:24Z"
+}

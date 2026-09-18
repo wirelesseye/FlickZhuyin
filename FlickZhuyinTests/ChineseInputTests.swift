@@ -151,7 +151,7 @@ final class SQLiteLexiconStoreTests: ChineseInputTestCase {
     func testSchemaMismatchThrows() throws {
         let userVersion = temporaryURL("user-version.sqlite3")
         try copyFixture(to: userVersion)
-        execute("PRAGMA user_version = 2", at: userVersion)
+        execute("PRAGMA user_version = 1", at: userVersion)
         XCTAssertThrowsError(try SQLiteLexiconStore(url: userVersion)) { error in
             guard case .schemaMismatch = error as? LexiconStoreError else {
                 return XCTFail("expected schemaMismatch, got \(error)")

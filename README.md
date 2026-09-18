@@ -107,6 +107,7 @@ KeyboardCore/ChineseInput/     音節解析、詞庫查詢、詞格與 Top-K 解
 FlickZhuyinTests/              狀態機、Flick 映射與中文輸入核心測試
 Tools/DictionaryCompiler/      Rime 詞典離線編譯器與 Python 測試
 Vendor/rime-terra-pinyin/      鎖定版本的上游詞典、授權與 manifest
+Vendor/rime-essay/             鎖定版本的上游預設詞彙、授權與 manifest
 Generated/                     編譯產物（SQLite 詞典與 report）
 ```
 
@@ -120,7 +121,7 @@ Generated/                     編譯產物（SQLite 詞典與 report）
 - `Decoder` 將詞格與 raw 注音音節合併成永遠連通的解碼圖，以精確 Top-K DAG 動態規劃輸出穩定排序的候選；沒有詞典匹配的片段會以原始注音保留。
 - 排序由可替換的 `DecoderScorer` 負責，目前 `BaselineDecoderScorer` 只使用稀疏的 Rime `sourceWeight`、parser cost 與簡易分詞懲罰，不是完整的語言模型排序。
 
-pinned Terra 詞典經過碼表最小化：常見詞如「注音」「你好」屬於 Rime 的 preset vocabulary，未包含在本專案 vendor 的 `terra_pinyin.dict.yaml` 中，在 production 資料裡只以單字形式存在。baseline 排序因此常以單字讀音優先；fixture 詞典另外收錄了這些詞，用來測試多字詞路徑。
+pinned Terra 詞典經過碼表最小化，常見詞如「注音」「你好」原本屬於 Rime 的 preset vocabulary，未包含在 `terra_pinyin.dict.yaml` 中。編譯器改以 pinned Rime Essay 補齊這些常用詞：Terra 提供字音、多音字與明確詞條，Essay 提供常用詞與詞頻；沒有 Terra 明確讀音的 Essay 詞條會以各字的 Terra 單字讀音離線自動標音。合併後的 SQLite 以 `(text, base_key, tone_key)` 為唯一鍵，Essay 詞頻經 log1p 正規化為 `source_weight`，因此「注音」「你好」等詞是帶權重的單一詞條，而不是多個無權重單字臨時拼接。無法標音或超過組合上限的詞條會統計在編譯報告中，不會靜默遺失。
 
 ## 建置與測試
 
@@ -148,7 +149,9 @@ xcodebuild \
 - 詞格的多字詞、去重與展開上限
 - decoder 的 scoring、lattice 驗證、Top-K 限制、去重與 deterministic tie-break
 - 完整 pipeline 的 fixture 與 production 整合測試（完整覆蓋、raw fallback、聲調約束）
-- production 詞典的 metadata、entry count 與代表性查詢
+- production 詞典的 metadata、entry count、兩份來源 manifest 比對與代表性查詢
+- 「注音」在有聲調與無聲調輸入下都出現在 Top 10，且來自單一詞典詞條
+- production lookup 的 `EXPLAIN QUERY PLAN` 確認使用 `pronunciation_base_key` 索引
 
 Python 詞典編譯器另有單元測試與完整 corpus 驗證：
 
@@ -160,43 +163,63 @@ python3 -m unittest discover \
 
 ## 第三方資料
 
-中文詞庫來自 Rime 的 Terra Pinyin，以 pinned commit 方式鎖定：
+中文詞庫來自兩份 Rime 資料，皆以 pinned commit 方式鎖定：
 
-- Repository：<https://github.com/rime/rime-terra-pinyin>
-- Commit：`8a2c895ad7ee8e2b137d91be77f18f86b04d7fc9`
-- 詞典：<https://raw.githubusercontent.com/rime/rime-terra-pinyin/8a2c895ad7ee8e2b137d91be77f18f86b04d7fc9/terra_pinyin.dict.yaml>
-- Repository 授權：LGPL-3.0（`Vendor/rime-terra-pinyin/LICENSE`）
-- 詞典 header 另註明參考 CC-CEDICT，採 CC BY-SA 3.0
+- Terra Pinyin：<https://github.com/rime/rime-terra-pinyin>，commit `8a2c895ad7ee8e2b137d91be77f18f86b04d7fc9`
+  - 詞典：<https://raw.githubusercontent.com/rime/rime-terra-pinyin/8a2c895ad7ee8e2b137d91be77f18f86b04d7fc9/terra_pinyin.dict.yaml>
+  - Repository 授權：LGPL-3.0（`Vendor/rime-terra-pinyin/LICENSE`）
+  - 詞典 header 另註明參考 CC-CEDICT，採 CC BY-SA 3.0
+- Rime Essay：<https://github.com/rime/rime-essay>，commit `e2652ea18609a879eae3e87db5d25b7fbc1a4f93`
+  - 詞彙：<https://raw.githubusercontent.com/rime/rime-essay/e2652ea18609a879eae3e87db5d25b7fbc1a4f93/essay.txt>
+  - Repository 授權：LGPL-3.0（`Vendor/rime-essay/LICENSE`）
 
-`Vendor/rime-terra-pinyin/SOURCE.json` 記錄來源、commit、SHA-256 與詞典版本；`build` 會驗證 source 的 SHA-256，`fetch` 只能在明確更新 commit 時使用，一般 build 與 App 執行期都不連網。完整 attribution、修改說明與授權連結見 `THIRD_PARTY_NOTICES.md`；同一份 notices 與上游 LGPL 授權會打包進主 App 及 Keyboard Extension，App 內可從「第三方授權」開啟閱讀。SQLite 衍生資料的 sidecar 授權位於 `Generated/LICENSE.md`。發佈前仍需人工確認最終合規方式。
+各 `SOURCE.json` 記錄來源、commit、SHA-256 與取得時間，Essay manifest 另記錄 LICENSE SHA-256 與格式版本；`build` 會驗證 source 與 license 的 SHA-256，`fetch-terra`／`fetch-essay` 只能在明確指定 commit 時使用，一般 build 與 App 執行期都不連網。完整 attribution、修改說明與授權連結見 `THIRD_PARTY_NOTICES.md`；同一份 notices 與上游 LGPL 授權會打包進主 App 及 Keyboard Extension，App 內可從「第三方授權」開啟閱讀。SQLite 衍生資料的 sidecar 授權位於 `Generated/LICENSE.md`。發佈前仍需人工確認最終合規方式。
 
 FlickZhuyin 自有程式碼目前未授予開源授權，repository 根目錄也刻意不包含自有程式碼的 `LICENSE` 檔；第三方材料及衍生詞典的授權如上述，不受影響。
 
 ## 詞典編譯
 
+上游資料只在更新來源時以 `fetch-terra`／`fetch-essay` 下載，兩者都必須指定完整的 40 字元 commit：
+
+```sh
+python3 Tools/DictionaryCompiler/compile_dictionary.py fetch-terra \
+  --commit <terra-commit> --dest Vendor/rime-terra-pinyin
+
+python3 Tools/DictionaryCompiler/compile_dictionary.py fetch-essay \
+  --commit <essay-commit> --dest Vendor/rime-essay
+```
+
 重建 production 詞典與 report（不需要網路）：
 
 ```sh
 python3 Tools/DictionaryCompiler/compile_dictionary.py build \
-  --source Vendor/rime-terra-pinyin/terra_pinyin.dict.yaml \
-  --manifest Vendor/rime-terra-pinyin/SOURCE.json \
+  --terra-source Vendor/rime-terra-pinyin/terra_pinyin.dict.yaml \
+  --terra-manifest Vendor/rime-terra-pinyin/SOURCE.json \
+  --essay-source Vendor/rime-essay/essay.txt \
+  --essay-manifest Vendor/rime-essay/SOURCE.json \
   --output Generated/flickzhuyin.sqlite3 \
   --report Generated/dictionary-report.json
 ```
 
-在相同 Python 與 SQLite library 版本下，相同 source bytes 與 compiler 版本會產生 byte-for-byte 相同的 SQLite 檔案；不同 SQLite library 版本只保證 schema、metadata、排序後資料內容與 report 相同，不保證實體 page layout 或檔案 hash 相同。output 只加入 `FlickZhuyinKeyboard` 的 bundle resources。Swift 測試使用的迷你 fixture 由下列命令產生，Python 測試以 logical database snapshot 檢查它是否與 fixture source 同步：
+編譯器會先編譯 Terra，建立完整詞與單字讀音索引；Essay 詞條優先使用 Terra 明確詞讀音，否則以單字讀音自動組合，每個詞最多保留 16 組讀音，超過上限會在 report 中記錄。Essay 詞頻以 `log1p(frequency) / log1p(max_frequency)` 正規化為 `0...1` 權重，與 Terra 詞條以 `(text, base_key, tone_key)` 合併；無法標音的詞條只會統計在 report，格式錯誤或 hash 不符則會讓 build 失敗。report 也會記錄資料庫大小與編譯時間，資料庫大小有硬上限。
+
+在相同 Python 與 SQLite library 版本下，相同 source bytes 與 compiler 版本會產生 byte-for-byte 相同的 SQLite 檔案與 report；不同 SQLite library 版本只保證 schema、metadata、排序後資料內容與 report 相同，不保證 SQLite 實體 page layout 或檔案 hash 相同。編譯耗時不寫入可重現的 report。output 只加入 `FlickZhuyinKeyboard` 的 bundle resources。Swift 測試使用的迷你 fixture 由下列命令產生，Python 測試以 logical database snapshot 檢查它是否與 fixture source 同步：
 
 ```sh
 python3 Tools/DictionaryCompiler/compile_dictionary.py build \
-  --source Tools/DictionaryCompiler/tests/fixtures/zhuyin_tests.dict.yaml \
-  --manifest Tools/DictionaryCompiler/tests/fixtures/zhuyin_tests.SOURCE.json \
+  --terra-source Tools/DictionaryCompiler/tests/fixtures/zhuyin_tests.dict.yaml \
+  --terra-manifest Tools/DictionaryCompiler/tests/fixtures/zhuyin_tests.SOURCE.json \
+  --essay-source Tools/DictionaryCompiler/tests/fixtures/zhuyin_tests.essay.txt \
+  --essay-manifest Tools/DictionaryCompiler/tests/fixtures/zhuyin_tests.essay.SOURCE.json \
   --output FlickZhuyinTests/Fixtures/flickzhuyin-tests.sqlite3 \
   --report /tmp/flickzhuyin-fixture-report.json
 ```
 
 ## 效能
 
-`ChineseInputPerformanceTests` 與 `DecoderPerformanceTests` 會量測並 assert 下列 Release 門檻：Extension 開啟詞典 < 50 ms、exact lookup p95 < 5 ms、10-token parser < 2 ms、10-token matcher < 20 ms、10-token decoder < 5 ms、完整 parser → matcher → decoder pipeline < 30 ms。decoder 與 pipeline 測試以每個輸入「最佳批次平均」作為穩定估計，避免模擬器排程造成的離群值影響單次量測，並同時輸出 min/avg/p95 供記錄（在 10-token 壓力 lattice 上，CPU 時間量測約為 decoder 1.4 ms、pipeline 3.5 ms）。
+`ChineseInputPerformanceTests` 與 `DecoderPerformanceTests` 是防止演算法或 I/O 發生災難性退化的寬鬆保護，不代表產品延遲目標。Release 模擬器的 Decoder p95 上限為 100 ms，完整 parser → matcher → decoder Pipeline p95 上限為 250 ms；測試直接 assert 全部樣本的 p95，並輸出 min、平均與 p95 供比較。SQLite open、冷／熱查詢、parser 與 matcher 也分別設有 Debug／Release 寬鬆門檻。加入 Essay 與讀音 provenance 後 production 資料庫約 140 MB，Extension 啟動仍只把音節 inventory 載入記憶體，詞條查詢維持依 `base_key` 與 `syllable_count` 使用索引。
+
+`Generated/flickzhuyin.sqlite3` 是鍵盤執行所需的可重現資源，因此不加入 `.gitignore`；由於檔案超過 GitHub 一般 Git blob 的 100 MB 限制，repository 透過 Git LFS 追蹤它。clone 後需安裝 Git LFS 才能取得完整資料庫。
 
 ## 隱私
 

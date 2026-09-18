@@ -43,3 +43,6 @@ __pycache__/
 
 # Misc
 *.log
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
