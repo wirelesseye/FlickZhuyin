@@ -3,8 +3,7 @@ import Foundation
 struct KeyboardEngine: Sendable {
     private(set) var mode: KeyboardMode
     private(set) var letterCase: LetterCaseState = .lowercase
-    private(set) var zhuyinSymbols: [Character] = []
-    private(set) var zhuyinTone: ZhuyinTone?
+    private var zhuyinTokens: [ZhuyinToken] = []
     private var lastShiftTap: TimeInterval?
 
     init(mode: KeyboardMode = .zhuyin) {
@@ -12,8 +11,8 @@ struct KeyboardEngine: Sendable {
     }
 
     var candidate: String? {
-        guard !zhuyinSymbols.isEmpty else { return nil }
-        return String(zhuyinSymbols) + (zhuyinTone?.symbol ?? "")
+        guard !zhuyinTokens.isEmpty else { return nil }
+        return zhuyinTokens.map(\.text).joined()
     }
 
     mutating func command(for key: KeyboardKey, at timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime) -> KeyboardCommand {
@@ -30,26 +29,24 @@ struct KeyboardEngine: Sendable {
             return .insertText(text)
         case let .zhuyin(character):
             guard mode == .zhuyin else { return .none }
-            zhuyinSymbols.append(character)
+            zhuyinTokens.append(.symbol(character))
             return .none
         case let .tone(tone):
-            guard mode == .zhuyin, !zhuyinSymbols.isEmpty else { return .none }
-            zhuyinTone = tone
+            guard mode == .zhuyin, !zhuyinTokens.isEmpty else { return .none }
+            if case .some(.tone) = zhuyinTokens.last {
+                zhuyinTokens[zhuyinTokens.count - 1] = .tone(tone)
+            } else {
+                zhuyinTokens.append(.tone(tone))
+            }
             return .none
         case .shift:
             guard mode == .abc else { return .none }
             updateShift(at: timestamp)
             return .none
         case .delete:
-            if mode == .zhuyin {
-                if zhuyinTone != nil {
-                    zhuyinTone = nil
-                    return .none
-                }
-                if !zhuyinSymbols.isEmpty {
-                    zhuyinSymbols.removeLast()
-                    return .none
-                }
+            if mode == .zhuyin, !zhuyinTokens.isEmpty {
+                zhuyinTokens.removeLast()
+                return .none
             }
             return .deleteBackward
         case .space:
@@ -73,8 +70,7 @@ struct KeyboardEngine: Sendable {
 
     private mutating func takeCandidate() -> String? {
         guard let candidate else { return nil }
-        zhuyinSymbols.removeAll(keepingCapacity: true)
-        zhuyinTone = nil
+        zhuyinTokens.removeAll(keepingCapacity: true)
         return candidate
     }
 
@@ -91,6 +87,18 @@ struct KeyboardEngine: Sendable {
         } else {
             letterCase = letterCase == .shifted ? .lowercase : .shifted
             lastShiftTap = timestamp
+        }
+    }
+}
+
+private enum ZhuyinToken: Equatable, Sendable {
+    case symbol(Character)
+    case tone(ZhuyinTone)
+
+    var text: String {
+        switch self {
+        case let .symbol(character): String(character)
+        case let .tone(tone): tone.symbol
         }
     }
 }

@@ -78,6 +78,28 @@ final class KeyboardEngineTests: XCTestCase {
         XCTAssertEqual(engine.candidate, "ㄇˊ")
     }
 
+    func testToneStaysInPlaceWhenMoreZhuyinIsEntered() {
+        var engine = KeyboardEngine()
+        for key in [
+            KeyboardKey.zhuyin("ㄓ"), .zhuyin("ㄨ"), .tone(.fourth),
+            .zhuyin("ㄧ"), .zhuyin("ㄣ"), .tone(.first)
+        ] {
+            XCTAssertEqual(engine.command(for: key), .none)
+        }
+        XCTAssertEqual(engine.candidate, "ㄓㄨˋㄧㄣˉ")
+    }
+
+    func testToneOnlyReplacesImmediatelyPreviousTone() {
+        var engine = KeyboardEngine()
+        _ = engine.command(for: .zhuyin("ㄅ"))
+        _ = engine.command(for: .tone(.second))
+        _ = engine.command(for: .zhuyin("ㄆ"))
+        _ = engine.command(for: .tone(.third))
+        XCTAssertEqual(engine.candidate, "ㄅˊㄆˇ")
+        _ = engine.command(for: .tone(.fourth))
+        XCTAssertEqual(engine.candidate, "ㄅˊㄆˋ")
+    }
+
     func testZhuyinDeleteRemovesToneThenSymbolsThenDocumentText() {
         var engine = KeyboardEngine()
         _ = engine.command(for: .zhuyin("ㄓ"))
