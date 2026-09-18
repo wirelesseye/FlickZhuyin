@@ -227,8 +227,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func refreshUI() {
         if engine.mode == .zhuyin {
-            candidateButton?.setTitle(engine.candidate, for: .normal)
-            candidateButton?.isEnabled = engine.candidate != nil
+            updateCandidateWithoutAnimation()
             neutralToneButton?.alpha = engine.candidate == nil ? 0 : 1
             neutralToneButton?.isUserInteractionEnabled = engine.candidate != nil
             neutralToneButton?.accessibilityElementsHidden = engine.candidate == nil
@@ -267,6 +266,17 @@ final class KeyboardViewController: UIInputViewController {
             case .nextKeyboard, .zhuyin, .commitCandidate:
                 break
             }
+        }
+    }
+
+    private func updateCandidateWithoutAnimation() {
+        guard let candidateButton else { return }
+        UIView.performWithoutAnimation {
+            candidateButton.setTitle(engine.candidate, for: .normal)
+            candidateButton.isEnabled = engine.candidate != nil
+            candidateButton.layer.removeAllAnimations()
+            candidateButton.titleLabel?.layer.removeAllAnimations()
+            candidateButton.layoutIfNeeded()
         }
     }
 
