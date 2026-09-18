@@ -20,6 +20,10 @@ struct ContentView: View {
                             .stroke(Color(uiColor: .separator), lineWidth: 0.5)
                     }
                     .accessibilityLabel("Keyboard test text")
+
+                NavigationLink("第三方授權") {
+                    ThirdPartyLicensesView()
+                }
             }
             .padding()
             .navigationTitle("FlickZhuyin")

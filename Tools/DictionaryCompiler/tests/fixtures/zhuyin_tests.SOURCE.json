@@ -1,0 +1,8 @@
+{
+  "repository": "https://example.invalid/flickzhuyin-tests",
+  "commit": "0000000000000000000000000000000000000000",
+  "dictionaryPath": "zhuyin_tests.dict.yaml",
+  "sha256": "d3a8607d40c6c94572eeef8bad2b175cb69dfb14ab80fa6b19414f42ae178d74",
+  "dictionaryVersion": "1.0",
+  "retrievedAt": "2026-01-01T00:00:00Z"
+}

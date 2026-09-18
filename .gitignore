@@ -37,5 +37,9 @@ fastlane/test_output
 *.iml
 .vscode/
 
+# Python
+__pycache__/
+*.pyc
+
 # Misc
 *.log

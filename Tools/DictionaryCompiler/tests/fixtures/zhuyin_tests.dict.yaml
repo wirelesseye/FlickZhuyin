@@ -1,0 +1,30 @@
+# Test dictionary for FlickZhuyin unit tests.
+# The generated SQLite fixture must stay in sync with this file.
+---
+name: zhuyin_tests
+version: "1.0"
+sort: by_weight
+use_preset_vocabulary: false
+...
+中	zhong1
+中	zhong4
+中文	zhong1 wen2	97%
+中國	zhong1 guo2
+注音	zhu4 yin1	50%
+注意	zhu4 yi4
+你好	ni3 hao3
+好	hao3	80%
+好	hao4	20%
+你	ni3
+世界	shi4 jie4
+日	ri4
+知	zhi1
+吃	chi1	60%
+詩	shi1
+魚	yu2
+女	nv3
+綠	lv4
+雨	yu3
+我	wo3
+是	shi4
+的	de5

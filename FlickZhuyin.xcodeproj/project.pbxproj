@@ -21,6 +21,35 @@
 		A0000000000000000000000D /* FlickKeyButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000000D /* FlickKeyButton.swift */; };
 		A0000000000000000000000E /* ZhuyinLayout.swift in Extension Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000000E /* ZhuyinLayout.swift */; };
 		A0000000000000000000000F /* ZhuyinLayout.swift in Test Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000000E /* ZhuyinLayout.swift */; };
+		A10000000000000000000001 /* MandarinTone.swift in Extension Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* MandarinTone.swift */; };
+		A10000000000000000000002 /* Syllable.swift in Extension Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* Syllable.swift */; };
+		A10000000000000000000003 /* SyllableParser.swift in Extension Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000003 /* SyllableParser.swift */; };
+		A10000000000000000000004 /* SyllableLattice.swift in Extension Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000004 /* SyllableLattice.swift */; };
+		A10000000000000000000005 /* LexiconStore.swift in Extension Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000005 /* LexiconStore.swift */; };
+		A10000000000000000000006 /* SQLiteLexiconStore.swift in Extension Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000006 /* SQLiteLexiconStore.swift */; };
+		A10000000000000000000007 /* DictionaryMatcher.swift in Extension Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000007 /* DictionaryMatcher.swift */; };
+		A10000000000000000000008 /* WordLattice.swift in Extension Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* WordLattice.swift */; };
+		A10000000000000000000011 /* MandarinTone.swift in Test Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* MandarinTone.swift */; };
+		A10000000000000000000012 /* Syllable.swift in Test Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* Syllable.swift */; };
+		A10000000000000000000013 /* SyllableParser.swift in Test Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000003 /* SyllableParser.swift */; };
+		A10000000000000000000014 /* SyllableLattice.swift in Test Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000004 /* SyllableLattice.swift */; };
+		A10000000000000000000015 /* LexiconStore.swift in Test Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000005 /* LexiconStore.swift */; };
+		A10000000000000000000016 /* SQLiteLexiconStore.swift in Test Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000006 /* SQLiteLexiconStore.swift */; };
+		A10000000000000000000017 /* DictionaryMatcher.swift in Test Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000007 /* DictionaryMatcher.swift */; };
+		A10000000000000000000018 /* WordLattice.swift in Test Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* WordLattice.swift */; };
+		A10000000000000000000020 /* libsqlite3.tbd in Extension Frameworks */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000B /* libsqlite3.tbd */; };
+		A10000000000000000000021 /* libsqlite3.tbd in Test Frameworks */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000B /* libsqlite3.tbd */; };
+		A10000000000000000000022 /* flickzhuyin.sqlite3 in Extension Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000009 /* flickzhuyin.sqlite3 */; };
+		A10000000000000000000023 /* flickzhuyin-tests.sqlite3 in Test Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000A /* flickzhuyin-tests.sqlite3 */; };
+		A10000000000000000000024 /* ChineseInputTests.swift in Test Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000C /* ChineseInputTests.swift */; };
+		A10000000000000000000025 /* ProductionDictionaryIntegrationTests.swift in Test Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000D /* ProductionDictionaryIntegrationTests.swift */; };
+		A10000000000000000000026 /* ChineseInputPerformanceTests.swift in Test Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000E /* ChineseInputPerformanceTests.swift */; };
+		A10000000000000000000027 /* ThirdPartyLicensesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000F /* ThirdPartyLicensesView.swift */; };
+		A10000000000000000000028 /* THIRD_PARTY_NOTICES.md in App Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000010 /* THIRD_PARTY_NOTICES.md */; };
+		A10000000000000000000029 /* THIRD_PARTY_NOTICES.md in Extension Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000010 /* THIRD_PARTY_NOTICES.md */; };
+		A1000000000000000000002A /* Rime LICENSE in App Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000011 /* Rime LICENSE */; };
+		A1000000000000000000002B /* Rime LICENSE in Extension Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000011 /* Rime LICENSE */; };
+		A1000000000000000000002C /* Dictionary LICENSE.md in Extension Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000012 /* Dictionary LICENSE.md */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -60,12 +89,30 @@
 		B0000000000000000000000C /* FlickZhuyinTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FlickZhuyinTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B0000000000000000000000D /* FlickKeyButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlickKeyButton.swift; sourceTree = "<group>"; };
 		B0000000000000000000000E /* ZhuyinLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZhuyinLayout.swift; sourceTree = "<group>"; };
+		B10000000000000000000001 /* MandarinTone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MandarinTone.swift; sourceTree = "<group>"; };
+		B10000000000000000000002 /* Syllable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Syllable.swift; sourceTree = "<group>"; };
+		B10000000000000000000003 /* SyllableParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyllableParser.swift; sourceTree = "<group>"; };
+		B10000000000000000000004 /* SyllableLattice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyllableLattice.swift; sourceTree = "<group>"; };
+		B10000000000000000000005 /* LexiconStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LexiconStore.swift; sourceTree = "<group>"; };
+		B10000000000000000000006 /* SQLiteLexiconStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLiteLexiconStore.swift; sourceTree = "<group>"; };
+		B10000000000000000000007 /* DictionaryMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionaryMatcher.swift; sourceTree = "<group>"; };
+		B10000000000000000000008 /* WordLattice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordLattice.swift; sourceTree = "<group>"; };
+		B10000000000000000000009 /* flickzhuyin.sqlite3 */ = {isa = PBXFileReference; lastKnownFileType = file; path = flickzhuyin.sqlite3; sourceTree = "<group>"; };
+		B1000000000000000000000A /* flickzhuyin-tests.sqlite3 */ = {isa = PBXFileReference; lastKnownFileType = file; path = "flickzhuyin-tests.sqlite3"; sourceTree = "<group>"; };
+		B1000000000000000000000B /* libsqlite3.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libsqlite3.tbd; path = usr/lib/libsqlite3.tbd; sourceTree = SDKROOT; };
+		B1000000000000000000000C /* ChineseInputTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChineseInputTests.swift; sourceTree = "<group>"; };
+		B1000000000000000000000D /* ProductionDictionaryIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductionDictionaryIntegrationTests.swift; sourceTree = "<group>"; };
+		B1000000000000000000000E /* ChineseInputPerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChineseInputPerformanceTests.swift; sourceTree = "<group>"; };
+		B1000000000000000000000F /* ThirdPartyLicensesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThirdPartyLicensesView.swift; sourceTree = "<group>"; };
+		B10000000000000000000010 /* THIRD_PARTY_NOTICES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = THIRD_PARTY_NOTICES.md; sourceTree = SOURCE_ROOT; };
+		B10000000000000000000011 /* Rime LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; name = "Rime-LGPL-3.0.txt"; path = Vendor/rime-terra-pinyin/LICENSE; sourceTree = SOURCE_ROOT; };
+		B10000000000000000000012 /* Dictionary LICENSE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = LICENSE.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		F10000000000000000000001 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-		F10000000000000000000002 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-		F10000000000000000000003 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		F10000000000000000000002 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000020 /* libsqlite3.tbd in Extension Frameworks */, ); runOnlyForDeploymentPostprocessing = 0; };
+		F10000000000000000000003 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000021 /* libsqlite3.tbd in Test Frameworks */, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -76,15 +123,21 @@
 				D10000000000000000000003 /* FlickZhuyinKeyboard */,
 				D10000000000000000000004 /* KeyboardCore */,
 				D10000000000000000000005 /* FlickZhuyinTests */,
+				D10000000000000000000008 /* Generated */,
+				D1000000000000000000000A /* Frameworks */,
 				D10000000000000000000006 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		D10000000000000000000002 /* FlickZhuyinApp */ = {isa = PBXGroup; children = (B00000000000000000000001, B00000000000000000000002, ); path = FlickZhuyinApp; sourceTree = "<group>"; };
+		D10000000000000000000002 /* FlickZhuyinApp */ = {isa = PBXGroup; children = (B00000000000000000000001, B00000000000000000000002, B1000000000000000000000F /* ThirdPartyLicensesView.swift */, ); path = FlickZhuyinApp; sourceTree = "<group>"; };
 		D10000000000000000000003 /* FlickZhuyinKeyboard */ = {isa = PBXGroup; children = (B00000000000000000000003, B00000000000000000000004, B0000000000000000000000D, B00000000000000000000008, ); path = FlickZhuyinKeyboard; sourceTree = "<group>"; };
-		D10000000000000000000004 /* KeyboardCore */ = {isa = PBXGroup; children = (B00000000000000000000005, B00000000000000000000006, B00000000000000000000007, B0000000000000000000000E, ); path = KeyboardCore; sourceTree = "<group>"; };
-		D10000000000000000000005 /* FlickZhuyinTests */ = {isa = PBXGroup; children = (B0000000000000000000000A, ); path = FlickZhuyinTests; sourceTree = "<group>"; };
+		D10000000000000000000004 /* KeyboardCore */ = {isa = PBXGroup; children = (B00000000000000000000005, B00000000000000000000006, B00000000000000000000007, B0000000000000000000000E, D10000000000000000000007 /* ChineseInput */, ); path = KeyboardCore; sourceTree = "<group>"; };
+		D10000000000000000000005 /* FlickZhuyinTests */ = {isa = PBXGroup; children = (B0000000000000000000000A, B1000000000000000000000C, B1000000000000000000000D, B1000000000000000000000E, D10000000000000000000009 /* Fixtures */, ); path = FlickZhuyinTests; sourceTree = "<group>"; };
 		D10000000000000000000006 /* Products */ = {isa = PBXGroup; children = (B0000000000000000000000B, B00000000000000000000009, B0000000000000000000000C, ); name = Products; sourceTree = "<group>"; };
+		D10000000000000000000007 /* ChineseInput */ = {isa = PBXGroup; children = (B10000000000000000000001, B10000000000000000000002, B10000000000000000000003, B10000000000000000000004, B10000000000000000000005, B10000000000000000000006, B10000000000000000000007, B10000000000000000000008, ); path = ChineseInput; sourceTree = "<group>"; };
+		D10000000000000000000008 /* Generated */ = {isa = PBXGroup; children = (B10000000000000000000009, B10000000000000000000012 /* Dictionary LICENSE.md */, ); path = Generated; sourceTree = "<group>"; };
+		D10000000000000000000009 /* Fixtures */ = {isa = PBXGroup; children = (B1000000000000000000000A, ); path = Fixtures; sourceTree = "<group>"; };
+		D1000000000000000000000A /* Frameworks */ = {isa = PBXGroup; children = (B1000000000000000000000B, ); name = Frameworks; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -150,15 +203,15 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		F30000000000000000000001 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-		F30000000000000000000002 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-		F30000000000000000000003 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		F30000000000000000000001 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000028 /* THIRD_PARTY_NOTICES.md in App Resources */, A1000000000000000000002A /* Rime LICENSE in App Resources */, ); runOnlyForDeploymentPostprocessing = 0; };
+		F30000000000000000000002 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000022 /* flickzhuyin.sqlite3 in Extension Resources */, A10000000000000000000029 /* THIRD_PARTY_NOTICES.md in Extension Resources */, A1000000000000000000002B /* Rime LICENSE in Extension Resources */, A1000000000000000000002C /* Dictionary LICENSE.md in Extension Resources */, ); runOnlyForDeploymentPostprocessing = 0; };
+		F30000000000000000000003 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000023 /* flickzhuyin-tests.sqlite3 in Test Resources */, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		F20000000000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000001, A00000000000000000000002, ); runOnlyForDeploymentPostprocessing = 0; };
-		F20000000000000000000002 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000003, A00000000000000000000004, A00000000000000000000005, A00000000000000000000006, A00000000000000000000007, A0000000000000000000000D, A0000000000000000000000E, ); runOnlyForDeploymentPostprocessing = 0; };
-		F20000000000000000000003 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000009, A0000000000000000000000A, A0000000000000000000000B, A0000000000000000000000C, A0000000000000000000000F, ); runOnlyForDeploymentPostprocessing = 0; };
+		F20000000000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000001, A00000000000000000000002, A10000000000000000000027 /* ThirdPartyLicensesView.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
+		F20000000000000000000002 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000003, A00000000000000000000004, A00000000000000000000005, A00000000000000000000006, A00000000000000000000007, A0000000000000000000000D, A0000000000000000000000E, A10000000000000000000001, A10000000000000000000002, A10000000000000000000003, A10000000000000000000004, A10000000000000000000005, A10000000000000000000006, A10000000000000000000007, A10000000000000000000008, ); runOnlyForDeploymentPostprocessing = 0; };
+		F20000000000000000000003 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000009, A0000000000000000000000A, A0000000000000000000000B, A0000000000000000000000C, A0000000000000000000000F, A10000000000000000000011, A10000000000000000000012, A10000000000000000000013, A10000000000000000000014, A10000000000000000000015, A10000000000000000000016, A10000000000000000000017, A10000000000000000000018, A10000000000000000000024, A10000000000000000000025, A10000000000000000000026, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
