@@ -59,6 +59,15 @@ final class KeyboardEngineTests: XCTestCase {
         XCTAssertEqual(FlickGestureResolver.direction(deltaX: 2, deltaY: 30), .down)
     }
 
+    func testToneFlickExcludesNeutralTone() {
+        XCTAssertEqual(ZhuyinLayout.tones[.center], "一聲")
+        XCTAssertEqual(ZhuyinLayout.tones[.left], "ˊ")
+        XCTAssertEqual(ZhuyinLayout.tones[.up], "ˇ")
+        XCTAssertEqual(ZhuyinLayout.tones[.right], "ˋ")
+        XCTAssertNil(ZhuyinLayout.tones[.down])
+        XCTAssertNil(ZhuyinLayout.tone(for: .down))
+    }
+
     func testZhuyinCandidateWaitsForExplicitCommit() {
         var engine = KeyboardEngine()
         XCTAssertEqual(engine.command(for: .zhuyin("ㄓ")), .none)

@@ -6,6 +6,7 @@ final class KeyboardViewController: UIInputViewController {
     private weak var nextKeyboardButton: KeyboardButton?
     private weak var candidateButton: UIButton?
     private weak var toneButton: FlickKeyButton?
+    private weak var neutralToneButton: KeyboardButton?
     private var heightConstraint: NSLayoutConstraint?
 
     override func viewDidLoad() {
@@ -27,6 +28,7 @@ final class KeyboardViewController: UIInputViewController {
         nextKeyboardButton = nil
         candidateButton = nil
         toneButton = nil
+        neutralToneButton = nil
 
         switch engine.mode {
         case .zhuyin: buildZhuyinKeyboard()
@@ -96,6 +98,10 @@ final class KeyboardViewController: UIInputViewController {
                 row.addArrangedSubview(button)
             }
             switch rowIndex {
+            case 0:
+                let button = makeButton(for: .tone(.neutral))
+                row.addArrangedSubview(button)
+                neutralToneButton = button
             case 1:
                 row.addArrangedSubview(makeButton(for: .delete))
             case 2:
@@ -131,7 +137,8 @@ final class KeyboardViewController: UIInputViewController {
                 guard direction == .center else { return }
                 self.handle(.space)
             } else {
-                self.handle(.tone(ZhuyinLayout.tone(for: direction)))
+                guard let tone = ZhuyinLayout.tone(for: direction) else { return }
+                self.handle(.tone(tone))
             }
         }
         button.titleLabel?.font = .systemFont(ofSize: 15)
@@ -222,6 +229,9 @@ final class KeyboardViewController: UIInputViewController {
         if engine.mode == .zhuyin {
             candidateButton?.setTitle(engine.candidate, for: .normal)
             candidateButton?.isEnabled = engine.candidate != nil
+            neutralToneButton?.alpha = engine.candidate == nil ? 0 : 1
+            neutralToneButton?.isUserInteractionEnabled = engine.candidate != nil
+            neutralToneButton?.accessibilityElementsHidden = engine.candidate == nil
             toneButton?.mapping = engine.candidate == nil
                 ? FlickKeyMapping(["space"])
                 : ZhuyinLayout.tones
@@ -251,7 +261,10 @@ final class KeyboardViewController: UIInputViewController {
             case .modeSwitch:
                 button.setTitle(engine.mode == .zhuyin ? "ABC" : "中", for: .normal)
                 button.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
-            case .nextKeyboard, .zhuyin, .tone, .commitCandidate:
+            case let .tone(tone):
+                button.setTitle(tone.symbol, for: .normal)
+                button.titleLabel?.font = .systemFont(ofSize: 20, weight: .medium)
+            case .nextKeyboard, .zhuyin, .commitCandidate:
                 break
             }
         }
