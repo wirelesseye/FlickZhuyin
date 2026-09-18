@@ -86,6 +86,7 @@ final class KeyboardViewController: UIInputViewController {
         grid.distribution = .fillEqually
         for rowIndex in 0..<3 {
             let row = makeRow()
+            row.addArrangedSubview(rowIndex == 2 ? makeButton(for: .modeSwitch) : makeGridSpacer())
             for mapping in ZhuyinLayout.groups[(rowIndex * 3)..<(rowIndex * 3 + 3)] {
                 let button = makeFlickButton(mapping: mapping) { [weak self] direction in
                     guard let symbol = mapping[direction], let character = symbol.first else { return }
@@ -93,23 +94,33 @@ final class KeyboardViewController: UIInputViewController {
                 }
                 row.addArrangedSubview(button)
             }
+            switch rowIndex {
+            case 1:
+                row.addArrangedSubview(makeButton(for: .delete))
+            case 2:
+                row.addArrangedSubview(makeButton(for: .return))
+            default:
+                row.addArrangedSubview(makeGridSpacer())
+            }
             grid.addArrangedSubview(row)
         }
-        mainStack.addArrangedSubview(grid)
 
-        let controls = makeRow()
-        controls.heightAnchor.constraint(equalToConstant: 52).isActive = true
-        controls.addArrangedSubview(makeLeftControls())
-        controls.addArrangedSubview(makeToneControl())
-        controls.addArrangedSubview(makeRightControls())
-        mainStack.addArrangedSubview(controls)
+        let spaceRow = makeRow()
+        spaceRow.addArrangedSubview(makeGridSpacer())
+        spaceRow.addArrangedSubview(makeGridSpacer())
+        spaceRow.addArrangedSubview(makeToneControl())
+        spaceRow.addArrangedSubview(makeGridSpacer())
+        spaceRow.addArrangedSubview(makeGridSpacer())
+        grid.addArrangedSubview(spaceRow)
+        mainStack.addArrangedSubview(grid)
     }
 
-    private func makeLeftControls() -> UIStackView {
-        let stack = makeRow()
-        stack.addArrangedSubview(makeButton(for: .nextKeyboard))
-        stack.addArrangedSubview(makeButton(for: .modeSwitch))
-        return stack
+    private func makeGridSpacer() -> UIView {
+        let spacer = UIView()
+        spacer.isUserInteractionEnabled = false
+        spacer.backgroundColor = .clear
+        spacer.accessibilityElementsHidden = true
+        return spacer
     }
 
     private func makeToneControl() -> FlickKeyButton {
@@ -127,13 +138,6 @@ final class KeyboardViewController: UIInputViewController {
         button.accessibilityLabel = "空白或音調"
         toneButton = button
         return button
-    }
-
-    private func makeRightControls() -> UIStackView {
-        let stack = makeRow()
-        stack.addArrangedSubview(makeButton(for: .delete))
-        stack.addArrangedSubview(makeButton(for: .return))
-        return stack
     }
 
     private func pinnedVerticalStack(spacing: CGFloat) -> UIStackView {
@@ -216,7 +220,7 @@ final class KeyboardViewController: UIInputViewController {
     private func refreshUI() {
         if engine.mode == .zhuyin {
             candidateButton?.setTitle(engine.candidate, for: .normal)
-            candidateButton?.isHidden = engine.candidate == nil
+            candidateButton?.isEnabled = engine.candidate != nil
             toneButton?.mapping = engine.candidate == nil
                 ? FlickKeyMapping(["space"])
                 : ZhuyinLayout.tones
