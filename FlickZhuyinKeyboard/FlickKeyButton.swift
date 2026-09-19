@@ -85,31 +85,17 @@ private final class FlickPreviewView: UIView {
         didSet { updateSelection() }
     }
 
-    private var labels: [FlickDirection: UILabel] = [:]
+    private var options: [FlickDirection: FlickPreviewOptionView] = [:]
 
     init(mapping: FlickKeyMapping) {
         super.init(frame: .zero)
         isUserInteractionEnabled = false
-        layer.shadowColor = UIColor.black.cgColor
-        layer.shadowOpacity = 0.2
-        layer.shadowRadius = 6
-        layer.shadowOffset = CGSize(width: 0, height: 2)
 
         for direction in FlickDirection.allCases {
             guard let symbol = mapping[direction] else { continue }
-            let label = UILabel()
-            label.text = symbol
-            label.textAlignment = .center
-            label.font = .systemFont(ofSize: symbol.count > 1 ? 15 : 22, weight: .medium)
-            label.textColor = .label
-            label.backgroundColor = .systemBackground
-            label.layer.cornerRadius = 7
-            label.layer.cornerCurve = .continuous
-            label.layer.masksToBounds = true
-            label.layer.borderWidth = 0.5
-            label.layer.borderColor = UIColor.separator.cgColor
-            addSubview(label)
-            labels[direction] = label
+            let option = FlickPreviewOptionView(symbol: symbol)
+            addSubview(option)
+            options[direction] = option
         }
     }
 
@@ -124,9 +110,9 @@ private final class FlickPreviewView: UIView {
             .center: (1, 1), .left: (0, 1), .up: (1, 0),
             .right: (2, 1), .down: (1, 2)
         ]
-        for (direction, label) in labels {
+        for (direction, option) in options {
             guard let position = positions[direction] else { continue }
-            label.frame = CGRect(
+            option.frame = CGRect(
                 x: CGFloat(position.0) * cell.width + 2,
                 y: CGFloat(position.1) * cell.height + 2,
                 width: cell.width - 4,
@@ -136,10 +122,58 @@ private final class FlickPreviewView: UIView {
     }
 
     private func updateSelection() {
-        for (direction, label) in labels {
-            let selected = direction == selectedDirection
-            label.backgroundColor = selected ? .systemBlue : .systemBackground
-            label.textColor = selected ? .white : .label
+        for (direction, option) in options {
+            option.isSelected = direction == selectedDirection
         }
+    }
+}
+
+private final class FlickPreviewOptionView: UIView {
+    var isSelected = false {
+        didSet { updateAppearance() }
+    }
+
+    private let materialView = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+    private let tintView = UIView()
+    private let label = UILabel()
+
+    init(symbol: String) {
+        super.init(frame: .zero)
+
+        layer.cornerRadius = 10
+        layer.cornerCurve = .continuous
+        layer.borderWidth = 0.5
+        layer.borderColor = UIColor.separator.cgColor
+        clipsToBounds = true
+
+        materialView.isUserInteractionEnabled = false
+        addSubview(materialView)
+
+        tintView.isUserInteractionEnabled = false
+        materialView.contentView.addSubview(tintView)
+
+        label.text = symbol
+        label.textAlignment = .center
+        label.font = .systemFont(ofSize: symbol.count > 1 ? 15 : 22, weight: .medium)
+        materialView.contentView.addSubview(label)
+        updateAppearance()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        materialView.frame = bounds
+        tintView.frame = materialView.bounds
+        label.frame = materialView.bounds
+    }
+
+    private func updateAppearance() {
+        tintView.backgroundColor = isSelected
+            ? UIColor.systemBlue.withAlphaComponent(0.86)
+            : UIColor.systemBackground.withAlphaComponent(0.82)
+        label.textColor = isSelected ? .white : .label
     }
 }

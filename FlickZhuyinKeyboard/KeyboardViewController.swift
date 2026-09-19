@@ -18,7 +18,8 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemGray5
+        view.isOpaque = false
+        view.backgroundColor = .clear
         configureHeight()
         rebuildKeyboard()
     }
@@ -60,7 +61,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func buildABCKeyboard() {
-        let keyboardStack = pinnedVerticalStack(spacing: 8)
+        let keyboardStack = pinnedVerticalStack(spacing: 7)
         keyboardStack.distribution = .fillEqually
         for (index, row) in KeyboardLayout.letterRows.enumerated() {
             let rowStack = makeRow()
@@ -90,17 +91,17 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func buildZhuyinKeyboard() {
-        let mainStack = pinnedVerticalStack(spacing: 6)
+        let mainStack = pinnedVerticalStack(spacing: 7)
 
         let candidateBar = CandidateBarView()
         candidateBar.onSelect = { [weak self] candidate in self?.select(candidate) }
-        candidateBar.heightAnchor.constraint(equalToConstant: 38).isActive = true
+        candidateBar.heightAnchor.constraint(equalToConstant: 40).isActive = true
         mainStack.addArrangedSubview(candidateBar)
         self.candidateBar = candidateBar
 
         let grid = UIStackView()
         grid.axis = .vertical
-        grid.spacing = 6
+        grid.spacing = 7
         grid.distribution = .fillEqually
         for rowIndex in 0..<3 {
             let row = makeRow()
@@ -157,7 +158,7 @@ final class KeyboardViewController: UIInputViewController {
             }
         }
         button.titleLabel?.font = .systemFont(ofSize: 15)
-        button.normalColor = .systemGray3
+        button.normalColor = .tertiarySystemFill
         button.accessibilityLabel = "空白或音調"
         toneButton = button
         return button
@@ -170,10 +171,10 @@ final class KeyboardViewController: UIInputViewController {
         stack.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 6),
-            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
-            stack.topAnchor.constraint(equalTo: view.topAnchor, constant: 6),
-            stack.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -8)
+            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 7),
+            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -7),
+            stack.topAnchor.constraint(equalTo: view.topAnchor, constant: 7),
+            stack.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
         return stack
     }
@@ -181,7 +182,7 @@ final class KeyboardViewController: UIInputViewController {
     private func makeRow() -> UIStackView {
         let stack = UIStackView()
         stack.axis = .horizontal
-        stack.spacing = 6
+        stack.spacing = 7
         stack.distribution = .fillEqually
         return stack
     }
@@ -189,7 +190,7 @@ final class KeyboardViewController: UIInputViewController {
     private func makeControlRow() -> UIStackView {
         let stack = UIStackView()
         stack.axis = .horizontal
-        stack.spacing = 6
+        stack.spacing = 7
         stack.distribution = .fill
         return stack
     }
@@ -201,7 +202,7 @@ final class KeyboardViewController: UIInputViewController {
         let button = FlickKeyButton(mapping: mapping)
         button.overlayHost = view
         button.onSelection = onSelection
-        button.normalColor = .systemBackground
+        button.normalColor = .systemBackground.withAlphaComponent(0.62)
         button.accessibilityLabel = mapping.center
         return button
     }
@@ -209,7 +210,9 @@ final class KeyboardViewController: UIInputViewController {
     private func makeButton(for key: KeyboardKey) -> KeyboardButton {
         let button = KeyboardButton(type: .system)
         button.accessibilityLabel = accessibilityLabel(for: key)
-        button.normalColor = isLetter(key) ? .systemBackground : .systemGray3
+        button.normalColor = isLetter(key)
+            ? .systemBackground.withAlphaComponent(0.62)
+            : .tertiarySystemFill
 
         if key == .nextKeyboard {
             button.setImage(UIImage(systemName: "globe"), for: .normal)
@@ -307,17 +310,20 @@ final class KeyboardViewController: UIInputViewController {
                 button.setTitle(title, for: .normal)
             case .shift:
                 let symbol = engine.letterCase == .capsLocked ? "capslock.fill" : "shift.fill"
-                button.setImage(UIImage(systemName: symbol), for: .normal)
+                button.setTitle(nil, for: .normal)
+                button.setImage(keyIcon(named: symbol), for: .normal)
                 button.tintColor = engine.letterCase == .lowercase ? .label : .systemBlue
             case .delete:
-                button.setImage(UIImage(systemName: "delete.left.fill"), for: .normal)
+                button.setTitle(nil, for: .normal)
+                button.setImage(keyIcon(named: "delete.left"), for: .normal)
                 button.tintColor = .label
             case .space:
                 button.setTitle("space", for: .normal)
                 button.titleLabel?.font = .systemFont(ofSize: 15)
             case .return:
-                button.setTitle("return", for: .normal)
-                button.titleLabel?.font = .systemFont(ofSize: 15)
+                button.setTitle(nil, for: .normal)
+                button.setImage(keyIcon(named: "arrow.turn.down.left"), for: .normal)
+                button.tintColor = .label
             case .modeSwitch:
                 button.setTitle(engine.mode == .zhuyin ? "ABC" : "中", for: .normal)
                 button.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
@@ -331,7 +337,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func configureHeight() {
-        let constraint = view.heightAnchor.constraint(equalToConstant: 310)
+        let constraint = view.heightAnchor.constraint(equalToConstant: 260)
         constraint.priority = .defaultHigh
         constraint.isActive = true
         heightConstraint = constraint
@@ -340,14 +346,19 @@ final class KeyboardViewController: UIInputViewController {
     private func updateKeyboardHeight() {
         let compact = traitCollection.verticalSizeClass == .compact
         switch engine.mode {
-        case .zhuyin: heightConstraint?.constant = compact ? 232 : 310
-        case .abc: heightConstraint?.constant = compact ? 206 : 270
+        case .zhuyin: heightConstraint?.constant = compact ? 220 : 260
+        case .abc: heightConstraint?.constant = compact ? 190 : 230
         }
     }
 
     private func isLetter(_ key: KeyboardKey) -> Bool {
         if case .letter = key { return true }
         return false
+    }
+
+    private func keyIcon(named name: String) -> UIImage? {
+        let configuration = UIImage.SymbolConfiguration(pointSize: 16, weight: .regular)
+        return UIImage(systemName: name, withConfiguration: configuration)
     }
 
     private func accessibilityLabel(for key: KeyboardKey) -> String {
