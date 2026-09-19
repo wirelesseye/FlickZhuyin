@@ -1,6 +1,6 @@
 import UIKit
 
-final class CandidateBarView: UIView {
+final class CandidateBarView: UIView, UIScrollViewDelegate {
     var onSelect: ((InputCandidate) -> Void)?
     var onToggleExpansion: (() -> Void)?
     var onVisibleCandidatesChanged: ((Int) -> Void)?
@@ -30,6 +30,7 @@ final class CandidateBarView: UIView {
         super.init(frame: frame)
         backgroundColor = .clear
 
+        scrollView.delegate = self
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.alwaysBounceHorizontal = false
         if #available(iOS 26.0, *) {
@@ -132,7 +133,7 @@ final class CandidateBarView: UIView {
             for candidate in candidates {
                 stackView.addArrangedSubview(makeButton(for: candidate))
             }
-            scrollView.contentOffset = .zero
+            scrollView.setContentOffset(.zero, animated: false)
             stackView.spacing = Self.collapsedSpacing
             layoutIfNeeded()
             updateVisibleCandidateCount()
@@ -165,7 +166,7 @@ final class CandidateBarView: UIView {
         expandButton.accessibilityLabel = expanded ? "收合候選字" : "展開候選字"
         dividerView.isHidden = expanded || !hasCandidates
         scrollView.isScrollEnabled = !expanded
-        scrollView.contentOffset = .zero
+        scrollView.setContentOffset(.zero, animated: false)
         setExtrasAccessibilityHidden(expanded)
         isTransitioningExpansion = true
         UIView.animate(
@@ -199,11 +200,19 @@ final class CandidateBarView: UIView {
             width: max(0, bounds.maxX - dividerView.frame.maxX),
             height: bounds.height
         )
+        if isExpanded, scrollView.contentOffset != .zero {
+            scrollView.setContentOffset(.zero, animated: false)
+        }
         guard !isTransitioningExpansion, !isAdjustingLayout else { return }
         updateVisibleCandidateCount()
         if isExpanded {
             applyExpandedSpacing()
         }
+    }
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        guard isExpanded, scrollView.contentOffset != .zero else { return }
+        scrollView.setContentOffset(.zero, animated: false)
     }
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
