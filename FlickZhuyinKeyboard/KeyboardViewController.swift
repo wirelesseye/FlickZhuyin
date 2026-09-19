@@ -4,10 +4,17 @@ final class KeyboardViewController: UIInputViewController {
     private var engine = KeyboardEngine()
     private var keyButtons: [(key: KeyboardKey, button: KeyboardButton)] = []
     private weak var nextKeyboardButton: KeyboardButton?
-    private weak var candidateButton: UIButton?
+    private weak var candidateBar: CandidateBarView?
     private weak var toneButton: FlickKeyButton?
     private weak var neutralToneButton: KeyboardButton?
     private var heightConstraint: NSLayoutConstraint?
+    private var documentEffectDepth = 0
+
+    private var coordinator: ChineseInputCoordinator?
+
+    private lazy var effectApplier = DocumentEffectApplier(
+        client: TextDocumentProxyClient(proxy: textDocumentProxy)
+    )
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -22,11 +29,25 @@ final class KeyboardViewController: UIInputViewController {
         updateKeyboardHeight()
     }
 
+    override func textWillChange(_ textInput: UITextInput?) {
+        super.textWillChange(textInput)
+        handleHostDocumentChange()
+    }
+
+    override func textDidChange(_ textInput: UITextInput?) {
+        super.textDidChange(textInput)
+        handleHostDocumentChange()
+    }
+
+    override func handleInputModeList(from view: UIView, with event: UIEvent) {
+        super.handleInputModeList(from: view, with: event)
+    }
+
     private func rebuildKeyboard() {
         view.subviews.forEach { $0.removeFromSuperview() }
         keyButtons.removeAll(keepingCapacity: true)
         nextKeyboardButton = nil
-        candidateButton = nil
+        candidateBar = nil
         toneButton = nil
         neutralToneButton = nil
 
@@ -71,17 +92,11 @@ final class KeyboardViewController: UIInputViewController {
     private func buildZhuyinKeyboard() {
         let mainStack = pinnedVerticalStack(spacing: 6)
 
-        let candidate = UIButton(type: .system)
-        candidate.contentHorizontalAlignment = .leading
-        candidate.titleLabel?.font = .systemFont(ofSize: 21, weight: .medium)
-        candidate.setTitleColor(.label, for: .normal)
-        candidate.backgroundColor = .secondarySystemBackground
-        candidate.layer.cornerRadius = 8
-        candidate.accessibilityLabel = "注音候選"
-        candidate.addAction(UIAction { [weak self] _ in self?.handle(.commitCandidate) }, for: .touchUpInside)
-        candidate.heightAnchor.constraint(equalToConstant: 38).isActive = true
-        mainStack.addArrangedSubview(candidate)
-        candidateButton = candidate
+        let candidateBar = CandidateBarView()
+        candidateBar.onSelect = { [weak self] candidate in self?.select(candidate) }
+        candidateBar.heightAnchor.constraint(equalToConstant: 38).isActive = true
+        mainStack.addArrangedSubview(candidateBar)
+        self.candidateBar = candidateBar
 
         let grid = UIStackView()
         grid.axis = .vertical
@@ -133,12 +148,12 @@ final class KeyboardViewController: UIInputViewController {
     private func makeToneControl() -> FlickKeyButton {
         let button = makeFlickButton(mapping: FlickKeyMapping(["space"])) { [weak self] direction in
             guard let self else { return }
-            if self.engine.candidate == nil {
-                guard direction == .center else { return }
-                self.handle(.space)
-            } else {
+            if self.engine.hasPendingTokens {
                 guard let tone = ZhuyinLayout.tone(for: direction) else { return }
                 self.handle(.tone(tone))
+            } else {
+                guard direction == .center else { return }
+                self.handle(.space)
             }
         }
         button.titleLabel?.font = .systemFont(ofSize: 15)
@@ -198,6 +213,10 @@ final class KeyboardViewController: UIInputViewController {
 
         if key == .nextKeyboard {
             button.setImage(UIImage(systemName: "globe"), for: .normal)
+            button.addAction(
+                UIAction { [weak self] _ in self?.prepareForInputModeSwitch() },
+                for: .touchUpInside
+            )
             button.addTarget(self, action: #selector(handleInputModeList(from:with:)), for: .allTouchEvents)
             nextKeyboardButton = button
         } else {
@@ -207,9 +226,14 @@ final class KeyboardViewController: UIInputViewController {
         return button
     }
 
+    private func prepareForInputModeSwitch() {
+        apply(engine.update(for: .nextKeyboard))
+        refreshUI()
+    }
+
     private func handle(_ key: KeyboardKey) {
         let oldMode = engine.mode
-        apply(engine.command(for: key))
+        apply(engine.update(for: key))
         if engine.mode != oldMode {
             rebuildKeyboard()
         } else {
@@ -217,24 +241,61 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
-    private func apply(_ command: KeyboardCommand) {
-        switch command {
-        case let .insertText(text): textDocumentProxy.insertText(text)
-        case .deleteBackward: textDocumentProxy.deleteBackward()
-        case .showInputModeList, .none: break
+    private func select(_ candidate: InputCandidate) {
+        apply(engine.selectCandidate(candidate))
+        refreshUI()
+    }
+
+    private func apply(_ update: KeyboardUpdate) {
+        documentEffectDepth += 1
+        defer { documentEffectDepth -= 1 }
+        effectApplier.apply(update.documentEffects)
+        if update.invalidatesCandidates {
+            coordinator?.invalidate()
         }
+        if let request = update.candidateRequest {
+            resolvedCoordinator().requestCandidates(for: request.tokens)
+        }
+    }
+
+    private func handleHostDocumentChange() {
+        guard documentEffectDepth == 0 else { return }
+        guard !engine.composition.isEmpty else { return }
+        resetComposition()
+    }
+
+    private func resetComposition() {
+        apply(engine.resetComposition())
+        refreshUI()
+    }
+
+    private func refreshCandidates() {
+        candidateBar?.update(with: coordinator?.candidates ?? [])
+    }
+
+    private func resolvedCoordinator() -> ChineseInputCoordinator {
+        if let coordinator {
+            return coordinator
+        }
+        let coordinator = ChineseInputCoordinator { [bundle = Bundle.main] in
+            try LexiconChineseInputPipeline(bundle: bundle)
+        }
+        coordinator.onChange = { [weak self] in self?.refreshCandidates() }
+        self.coordinator = coordinator
+        return coordinator
     }
 
     private func refreshUI() {
         if engine.mode == .zhuyin {
-            updateCandidateWithoutAnimation()
-            neutralToneButton?.alpha = engine.candidate == nil ? 0 : 1
-            neutralToneButton?.isUserInteractionEnabled = engine.candidate != nil
-            neutralToneButton?.accessibilityElementsHidden = engine.candidate == nil
-            toneButton?.mapping = engine.candidate == nil
-                ? FlickKeyMapping(["space"])
-                : ZhuyinLayout.tones
-            toneButton?.setTitle(engine.candidate == nil ? "space" : "調", for: .normal)
+            refreshCandidates()
+            let hasPending = engine.hasPendingTokens
+            neutralToneButton?.alpha = hasPending ? 1 : 0
+            neutralToneButton?.isUserInteractionEnabled = hasPending
+            neutralToneButton?.accessibilityElementsHidden = !hasPending
+            toneButton?.mapping = hasPending
+                ? ZhuyinLayout.tones
+                : FlickKeyMapping(["space"])
+            toneButton?.setTitle(hasPending ? "調" : "space", for: .normal)
         }
 
         for (key, button) in keyButtons {
@@ -263,20 +324,9 @@ final class KeyboardViewController: UIInputViewController {
             case let .tone(tone):
                 button.setTitle(tone.symbol, for: .normal)
                 button.titleLabel?.font = .systemFont(ofSize: 20, weight: .medium)
-            case .nextKeyboard, .zhuyin, .commitCandidate:
+            case .nextKeyboard, .zhuyin:
                 break
             }
-        }
-    }
-
-    private func updateCandidateWithoutAnimation() {
-        guard let candidateButton else { return }
-        UIView.performWithoutAnimation {
-            candidateButton.setTitle(engine.candidate, for: .normal)
-            candidateButton.isEnabled = engine.candidate != nil
-            candidateButton.layer.removeAllAnimations()
-            candidateButton.titleLabel?.layer.removeAllAnimations()
-            candidateButton.layoutIfNeeded()
         }
     }
 
@@ -310,7 +360,6 @@ final class KeyboardViewController: UIInputViewController {
         case .return: "Return"
         case .nextKeyboard: "Next keyboard"
         case .modeSwitch: engine.mode == .zhuyin ? "切換 ABC" : "切換中文"
-        case .commitCandidate: "確認候選"
         }
     }
 }

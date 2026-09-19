@@ -3,19 +3,29 @@ import Foundation
 struct KeyboardEngine: Sendable {
     private(set) var mode: KeyboardMode
     private(set) var letterCase: LetterCaseState = .lowercase
-    private var zhuyinTokens: [ZhuyinToken] = []
+    private(set) var composition = ZhuyinComposition()
     private var lastShiftTap: TimeInterval?
 
     init(mode: KeyboardMode = .zhuyin) {
         self.mode = mode
     }
 
-    var candidate: String? {
-        guard !zhuyinTokens.isEmpty else { return nil }
-        return zhuyinTokens.map(\.text).joined()
+    var markedText: String {
+        composition.markedText
     }
 
-    mutating func command(for key: KeyboardKey, at timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime) -> KeyboardCommand {
+    var pendingText: String {
+        composition.pendingText
+    }
+
+    var hasPendingTokens: Bool {
+        !composition.pendingTokens.isEmpty
+    }
+
+    mutating func update(
+        for key: KeyboardKey,
+        at timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime
+    ) -> KeyboardUpdate {
         switch key {
         case let .letter(character):
             guard mode == .abc else { return .none }
@@ -26,52 +36,117 @@ struct KeyboardEngine: Sendable {
                 letterCase = .lowercase
             }
             lastShiftTap = nil
-            return .insertText(text)
+            return KeyboardUpdate(documentEffects: [.insertText(text)])
         case let .zhuyin(character):
             guard mode == .zhuyin else { return .none }
-            zhuyinTokens.append(.symbol(character))
-            return .none
+            composition.pendingTokens.append(.symbol(character))
+            return pendingUpdate()
         case let .tone(tone):
-            guard mode == .zhuyin, !zhuyinTokens.isEmpty else { return .none }
-            if case .some(.tone) = zhuyinTokens.last {
-                zhuyinTokens[zhuyinTokens.count - 1] = .tone(tone)
+            guard mode == .zhuyin, !composition.pendingTokens.isEmpty else { return .none }
+            if case .tone = composition.pendingTokens.last {
+                composition.pendingTokens[composition.pendingTokens.count - 1] = .tone(tone)
             } else {
-                zhuyinTokens.append(.tone(tone))
+                composition.pendingTokens.append(.tone(tone))
             }
-            return .none
+            return pendingUpdate()
         case .shift:
             guard mode == .abc else { return .none }
             updateShift(at: timestamp)
             return .none
         case .delete:
-            if mode == .zhuyin, !zhuyinTokens.isEmpty {
-                zhuyinTokens.removeLast()
+            guard mode == .zhuyin else {
+                return KeyboardUpdate(documentEffects: [.deleteBackward])
+            }
+            if !composition.pendingTokens.isEmpty {
+                composition.pendingTokens.removeLast()
+                if composition.pendingTokens.isEmpty {
+                    if composition.selectedChunks.isEmpty {
+                        return KeyboardUpdate(
+                            documentEffects: [.setMarkedText(""), .unmarkText],
+                            invalidatesCandidates: true
+                        )
+                    }
+                    return KeyboardUpdate(
+                        documentEffects: [.setMarkedText(composition.markedText)],
+                        invalidatesCandidates: true
+                    )
+                }
+                return pendingUpdate()
+            }
+            if !composition.selectedChunks.isEmpty {
+                let chunk = composition.selectedChunks.removeLast()
+                composition.pendingTokens = chunk.sourceTokens
+                return pendingUpdate()
+            }
+            return KeyboardUpdate(documentEffects: [.deleteBackward])
+        case .space:
+            guard mode == .zhuyin, !composition.isEmpty else {
+                return KeyboardUpdate(documentEffects: [.insertText(" ")])
+            }
+            return .none
+        case .return:
+            guard mode == .zhuyin, !composition.isEmpty else {
+                return KeyboardUpdate(documentEffects: [.insertText("\n")])
+            }
+            let committedText = composition.markedText
+            composition = ZhuyinComposition()
+            return KeyboardUpdate(
+                documentEffects: [.insertText(committedText)],
+                invalidatesCandidates: true
+            )
+        case .nextKeyboard:
+            guard mode == .zhuyin, !composition.isEmpty else {
+                return KeyboardUpdate(documentEffects: [.showInputModeList])
+            }
+            composition = ZhuyinComposition()
+            return KeyboardUpdate(
+                documentEffects: [.unmarkText, .showInputModeList],
+                invalidatesCandidates: true
+            )
+        case .modeSwitch:
+            switch mode {
+            case .zhuyin:
+                let hadComposition = !composition.isEmpty
+                composition = ZhuyinComposition()
+                mode = .abc
+                return KeyboardUpdate(
+                    documentEffects: hadComposition ? [.unmarkText] : [],
+                    invalidatesCandidates: hadComposition
+                )
+            case .abc:
+                mode = .zhuyin
                 return .none
             }
-            return .deleteBackward
-        case .space:
-            return .insertText(" ")
-        case .return:
-            if mode == .zhuyin, let text = takeCandidate() {
-                return .insertText(text + "\n")
-            }
-            return .insertText("\n")
-        case .nextKeyboard:
-            return .showInputModeList
-        case .modeSwitch:
-            let pendingText = mode == .zhuyin ? takeCandidate() : nil
-            mode = mode == .zhuyin ? .abc : .zhuyin
-            return pendingText.map(KeyboardCommand.insertText) ?? .none
-        case .commitCandidate:
-            guard let text = takeCandidate() else { return .none }
-            return .insertText(text)
         }
     }
 
-    private mutating func takeCandidate() -> String? {
-        guard let candidate else { return nil }
-        zhuyinTokens.removeAll(keepingCapacity: true)
-        return candidate
+    mutating func selectCandidate(_ candidate: InputCandidate) -> KeyboardUpdate {
+        guard mode == .zhuyin, !composition.pendingTokens.isEmpty else { return .none }
+        composition.selectedChunks.append(
+            SelectedChunk(
+                text: candidate.text,
+                sourceTokens: composition.pendingTokens,
+                pronunciation: candidate.pronunciation
+            )
+        )
+        composition.pendingTokens.removeAll(keepingCapacity: true)
+        return KeyboardUpdate(
+            documentEffects: [.setMarkedText(composition.markedText)],
+            invalidatesCandidates: true
+        )
+    }
+
+    mutating func resetComposition() -> KeyboardUpdate {
+        guard !composition.isEmpty else { return .none }
+        composition = ZhuyinComposition()
+        return KeyboardUpdate(invalidatesCandidates: true)
+    }
+
+    private func pendingUpdate() -> KeyboardUpdate {
+        KeyboardUpdate(
+            documentEffects: [.setMarkedText(composition.markedText)],
+            candidateRequest: CandidateRequest(tokens: composition.pendingTokens)
+        )
     }
 
     private mutating func updateShift(at timestamp: TimeInterval) {
@@ -87,18 +162,6 @@ struct KeyboardEngine: Sendable {
         } else {
             letterCase = letterCase == .shifted ? .lowercase : .shifted
             lastShiftTap = timestamp
-        }
-    }
-}
-
-private enum ZhuyinToken: Equatable, Sendable {
-    case symbol(Character)
-    case tone(ZhuyinTone)
-
-    var text: String {
-        switch self {
-        case let .symbol(character): String(character)
-        case let .tone(tone): tone.symbol
         }
     }
 }

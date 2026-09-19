@@ -9,30 +9,30 @@ final class KeyboardEngineTests: XCTestCase {
 
     func testSingleShiftAppliesToOneLetter() {
         var engine = KeyboardEngine(mode: .abc)
-        XCTAssertEqual(engine.command(for: .shift, at: 1), .none)
+        XCTAssertEqual(engine.update(for: .shift, at: 1), .none)
         XCTAssertEqual(engine.letterCase, .shifted)
-        XCTAssertEqual(engine.command(for: .letter("a"), at: 1.1), .insertText("A"))
+        XCTAssertEqual(engine.update(for: .letter("a"), at: 1.1), KeyboardUpdate(documentEffects: [.insertText("A")]))
         XCTAssertEqual(engine.letterCase, .lowercase)
-        XCTAssertEqual(engine.command(for: .letter("b"), at: 1.2), .insertText("b"))
+        XCTAssertEqual(engine.update(for: .letter("b"), at: 1.2), KeyboardUpdate(documentEffects: [.insertText("b")]))
     }
 
     func testDoubleShiftEnablesAndDisablesCapsLock() {
         var engine = KeyboardEngine(mode: .abc)
-        _ = engine.command(for: .shift, at: 1)
-        _ = engine.command(for: .shift, at: 1.2)
+        _ = engine.update(for: .shift, at: 1)
+        _ = engine.update(for: .shift, at: 1.2)
         XCTAssertEqual(engine.letterCase, .capsLocked)
-        XCTAssertEqual(engine.command(for: .letter("a"), at: 1.3), .insertText("A"))
+        XCTAssertEqual(engine.update(for: .letter("a"), at: 1.3), KeyboardUpdate(documentEffects: [.insertText("A")]))
         XCTAssertEqual(engine.letterCase, .capsLocked)
-        _ = engine.command(for: .shift, at: 2)
+        _ = engine.update(for: .shift, at: 2)
         XCTAssertEqual(engine.letterCase, .lowercase)
     }
 
     func testControlKeyCommands() {
         var engine = KeyboardEngine(mode: .abc)
-        XCTAssertEqual(engine.command(for: .space), .insertText(" "))
-        XCTAssertEqual(engine.command(for: .return), .insertText("\n"))
-        XCTAssertEqual(engine.command(for: .delete), .deleteBackward)
-        XCTAssertEqual(engine.command(for: .nextKeyboard), .showInputModeList)
+        XCTAssertEqual(engine.update(for: .space), KeyboardUpdate(documentEffects: [.insertText(" ")]))
+        XCTAssertEqual(engine.update(for: .return), KeyboardUpdate(documentEffects: [.insertText("\n")]))
+        XCTAssertEqual(engine.update(for: .delete), KeyboardUpdate(documentEffects: [.deleteBackward]))
+        XCTAssertEqual(engine.update(for: .nextKeyboard), KeyboardUpdate(documentEffects: [.showInputModeList]))
     }
 
     func testAllZhuyinFlickMappings() {
@@ -68,23 +68,32 @@ final class KeyboardEngineTests: XCTestCase {
         XCTAssertNil(ZhuyinLayout.tone(for: .down))
     }
 
-    func testZhuyinCandidateWaitsForExplicitCommit() {
+    func testZhuyinInputMarksTextAndRequestsCandidates() {
         var engine = KeyboardEngine()
-        XCTAssertEqual(engine.command(for: .zhuyin("ㄓ")), .none)
-        XCTAssertEqual(engine.command(for: .zhuyin("ㄨ")), .none)
-        XCTAssertEqual(engine.command(for: .tone(.fourth)), .none)
-        XCTAssertEqual(engine.candidate, "ㄓㄨˋ")
-        XCTAssertEqual(engine.command(for: .commitCandidate), .insertText("ㄓㄨˋ"))
-        XCTAssertNil(engine.candidate)
+        XCTAssertEqual(
+            engine.update(for: .zhuyin("ㄓ")),
+            KeyboardUpdate(
+                documentEffects: [.setMarkedText("ㄓ")],
+                candidateRequest: CandidateRequest(tokens: [.symbol("ㄓ")])
+            )
+        )
+        XCTAssertEqual(
+            engine.update(for: .tone(.fourth)),
+            KeyboardUpdate(
+                documentEffects: [.setMarkedText("ㄓˋ")],
+                candidateRequest: CandidateRequest(tokens: [.symbol("ㄓ"), .tone(.fourth)])
+            )
+        )
+        XCTAssertEqual(engine.markedText, "ㄓˋ")
     }
 
     func testFirstToneIsVisibleAndToneCanBeReplaced() {
         var engine = KeyboardEngine()
-        _ = engine.command(for: .zhuyin("ㄇ"))
-        _ = engine.command(for: .tone(.first))
-        XCTAssertEqual(engine.candidate, "ㄇˉ")
-        _ = engine.command(for: .tone(.second))
-        XCTAssertEqual(engine.candidate, "ㄇˊ")
+        _ = engine.update(for: .zhuyin("ㄇ"))
+        _ = engine.update(for: .tone(.first))
+        XCTAssertEqual(engine.pendingText, "ㄇˉ")
+        _ = engine.update(for: .tone(.second))
+        XCTAssertEqual(engine.pendingText, "ㄇˊ")
     }
 
     func testToneStaysInPlaceWhenMoreZhuyinIsEntered() {
@@ -93,46 +102,67 @@ final class KeyboardEngineTests: XCTestCase {
             KeyboardKey.zhuyin("ㄓ"), .zhuyin("ㄨ"), .tone(.fourth),
             .zhuyin("ㄧ"), .zhuyin("ㄣ"), .tone(.first)
         ] {
-            XCTAssertEqual(engine.command(for: key), .none)
+            XCTAssertEqual(engine.update(for: key).documentEffects, [.setMarkedText(engine.markedText)])
         }
-        XCTAssertEqual(engine.candidate, "ㄓㄨˋㄧㄣˉ")
+        XCTAssertEqual(engine.markedText, "ㄓㄨˋㄧㄣˉ")
     }
 
     func testToneOnlyReplacesImmediatelyPreviousTone() {
         var engine = KeyboardEngine()
-        _ = engine.command(for: .zhuyin("ㄅ"))
-        _ = engine.command(for: .tone(.second))
-        _ = engine.command(for: .zhuyin("ㄆ"))
-        _ = engine.command(for: .tone(.third))
-        XCTAssertEqual(engine.candidate, "ㄅˊㄆˇ")
-        _ = engine.command(for: .tone(.fourth))
-        XCTAssertEqual(engine.candidate, "ㄅˊㄆˋ")
+        _ = engine.update(for: .zhuyin("ㄅ"))
+        _ = engine.update(for: .tone(.second))
+        _ = engine.update(for: .zhuyin("ㄆ"))
+        _ = engine.update(for: .tone(.third))
+        XCTAssertEqual(engine.pendingText, "ㄅˊㄆˇ")
+        _ = engine.update(for: .tone(.fourth))
+        XCTAssertEqual(engine.pendingText, "ㄅˊㄆˋ")
+    }
+
+    func testToneWithoutPendingIsIgnored() {
+        var engine = KeyboardEngine()
+        XCTAssertEqual(engine.update(for: .tone(.fourth)), .none)
+        XCTAssertTrue(engine.composition.isEmpty)
     }
 
     func testZhuyinDeleteRemovesToneThenSymbolsThenDocumentText() {
         var engine = KeyboardEngine()
-        _ = engine.command(for: .zhuyin("ㄓ"))
-        _ = engine.command(for: .zhuyin("ㄨ"))
-        _ = engine.command(for: .tone(.fourth))
-        XCTAssertEqual(engine.command(for: .delete), .none)
-        XCTAssertEqual(engine.candidate, "ㄓㄨ")
-        XCTAssertEqual(engine.command(for: .delete), .none)
-        XCTAssertEqual(engine.candidate, "ㄓ")
-        XCTAssertEqual(engine.command(for: .delete), .none)
-        XCTAssertNil(engine.candidate)
-        XCTAssertEqual(engine.command(for: .delete), .deleteBackward)
+        _ = engine.update(for: .zhuyin("ㄓ"))
+        _ = engine.update(for: .zhuyin("ㄨ"))
+        _ = engine.update(for: .tone(.fourth))
+        let toneDelete = engine.update(for: .delete)
+        XCTAssertEqual(toneDelete.documentEffects, [.setMarkedText("ㄓㄨ")])
+        XCTAssertEqual(toneDelete.candidateRequest?.tokens, [.symbol("ㄓ"), .symbol("ㄨ")])
+        XCTAssertEqual(engine.pendingText, "ㄓㄨ")
+        _ = engine.update(for: .delete)
+        XCTAssertEqual(engine.pendingText, "ㄓ")
+        let finalDelete = engine.update(for: .delete)
+        XCTAssertEqual(finalDelete.documentEffects, [.setMarkedText(""), .unmarkText])
+        XCTAssertTrue(finalDelete.invalidatesCandidates)
+        XCTAssertTrue(engine.composition.isEmpty)
+        XCTAssertEqual(engine.update(for: .delete), KeyboardUpdate(documentEffects: [.deleteBackward]))
     }
 
-    func testModeSwitchAndReturnCommitPendingCandidate() {
+    func testModeSwitchAndReturnCommitPendingComposition() {
         var switchEngine = KeyboardEngine()
-        _ = switchEngine.command(for: .zhuyin("ㄅ"))
-        XCTAssertEqual(switchEngine.command(for: .modeSwitch), .insertText("ㄅ"))
+        _ = switchEngine.update(for: .zhuyin("ㄅ"))
+        let switchUpdate = switchEngine.update(for: .modeSwitch)
+        XCTAssertEqual(switchUpdate.documentEffects, [.unmarkText])
+        XCTAssertTrue(switchUpdate.invalidatesCandidates)
         XCTAssertEqual(switchEngine.mode, .abc)
+        XCTAssertTrue(switchEngine.composition.isEmpty)
 
         var returnEngine = KeyboardEngine()
-        _ = returnEngine.command(for: .zhuyin("ㄆ"))
-        XCTAssertEqual(returnEngine.command(for: .return), .insertText("ㄆ\n"))
-        XCTAssertNil(returnEngine.candidate)
+        _ = returnEngine.update(for: .zhuyin("ㄆ"))
+        let returnUpdate = returnEngine.update(for: .return)
+        XCTAssertEqual(returnUpdate.documentEffects, [.insertText("ㄆ")])
+        XCTAssertTrue(returnUpdate.invalidatesCandidates)
+        XCTAssertTrue(returnEngine.composition.isEmpty)
+    }
+
+    func testModeSwitchFromABCProducesNoEffects() {
+        var engine = KeyboardEngine(mode: .abc)
+        XCTAssertEqual(engine.update(for: .modeSwitch), .none)
+        XCTAssertEqual(engine.mode, .zhuyin)
     }
 
     private func letters(in row: [KeyboardKey]) -> String {

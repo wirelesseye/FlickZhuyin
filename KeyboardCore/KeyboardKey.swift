@@ -3,21 +3,33 @@ import Foundation
 enum KeyboardKey: Equatable, Sendable {
     case letter(Character)
     case zhuyin(Character)
-    case tone(ZhuyinTone)
+    case tone(MandarinTone)
     case shift
     case delete
     case space
     case `return`
     case nextKeyboard
     case modeSwitch
-    case commitCandidate
 }
 
-enum KeyboardCommand: Equatable, Sendable {
+enum DocumentEffect: Equatable, Sendable {
+    case setMarkedText(String)
+    case unmarkText
     case insertText(String)
     case deleteBackward
     case showInputModeList
-    case none
+}
+
+struct CandidateRequest: Equatable, Sendable {
+    let tokens: [ZhuyinInputToken]
+}
+
+struct KeyboardUpdate: Equatable, Sendable {
+    var documentEffects: [DocumentEffect] = []
+    var candidateRequest: CandidateRequest?
+    var invalidatesCandidates: Bool = false
+
+    static let none = KeyboardUpdate()
 }
 
 enum LetterCaseState: Equatable, Sendable {
@@ -29,22 +41,4 @@ enum LetterCaseState: Equatable, Sendable {
 enum KeyboardMode: Equatable, Sendable {
     case zhuyin
     case abc
-}
-
-enum ZhuyinTone: Equatable, Sendable {
-    case first
-    case second
-    case third
-    case fourth
-    case neutral
-
-    var symbol: String {
-        switch self {
-        case .first: "ˉ"
-        case .second: "ˊ"
-        case .third: "ˇ"
-        case .fourth: "ˋ"
-        case .neutral: "˙"
-        }
-    }
 }
