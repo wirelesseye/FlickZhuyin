@@ -11,7 +11,10 @@ final class FlickKeyButton: KeyboardButton {
     private var startPoint = CGPoint.zero
     private var activeDirection: FlickDirection = .center
     private var preview: FlickPreviewView?
+    private var previewDelayWorkItem: DispatchWorkItem?
     private var dimmedButtonStates: [DimmedButtonState] = []
+
+    private static let previewLongPressDelay: TimeInterval = 0.5
 
     init(mapping: FlickKeyMapping) {
         self.mapping = mapping
@@ -28,7 +31,7 @@ final class FlickKeyButton: KeyboardButton {
         startPoint = touch.location(in: self)
         activeDirection = .center
         isHighlighted = true
-        showPreview(selected: .center)
+        schedulePreviewForLongPress()
         return true
     }
 
@@ -38,6 +41,9 @@ final class FlickKeyButton: KeyboardButton {
             deltaX: Double(point.x - startPoint.x),
             deltaY: Double(point.y - startPoint.y)
         )
+        if preview == nil, direction != .center {
+            showPreview(selected: direction)
+        }
         let active = mapping[direction] == nil ? nil : direction
         preview?.selectedDirection = active
         if let active, active != activeDirection {
@@ -49,6 +55,7 @@ final class FlickKeyButton: KeyboardButton {
 
     override func endTracking(_ touch: UITouch?, with event: UIEvent?) {
         defer {
+            cancelPendingPreview()
             hidePreview()
             isHighlighted = false
             super.endTracking(touch, with: event)
@@ -64,9 +71,26 @@ final class FlickKeyButton: KeyboardButton {
     }
 
     override func cancelTracking(with event: UIEvent?) {
+        cancelPendingPreview()
         hidePreview()
         isHighlighted = false
         super.cancelTracking(with: event)
+    }
+
+    private func schedulePreviewForLongPress() {
+        cancelPendingPreview()
+        guard showsPreview else { return }
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, self.showsPreview, self.preview == nil else { return }
+            self.showPreview(selected: self.activeDirection)
+        }
+        previewDelayWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.previewLongPressDelay, execute: workItem)
+    }
+
+    private func cancelPendingPreview() {
+        previewDelayWorkItem?.cancel()
+        previewDelayWorkItem = nil
     }
 
     private func showPreview(selected: FlickDirection) {
