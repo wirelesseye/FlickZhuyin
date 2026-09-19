@@ -9,15 +9,19 @@ final class CandidateBarView: UIView {
     private(set) var visibleCandidateCount = 0
     private var isTransitioningExpansion = false
     private var isAdjustingLayout = false
+    private var hasCandidates = false
 
     static let animationDuration: TimeInterval = 0.25
 
     private static let collapsedSpacing: CGFloat = 2
     private static let contentInset: CGFloat = 4
+    private static let expandSymbolPointSize: CGFloat = 13
+    private static let dividerHeight: CGFloat = 20
 
     private let scrollView = UIScrollView()
     private let stackView = UIStackView()
     private let expandButton = UIButton(type: .system)
+    private let dividerView = UIView()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -37,18 +41,17 @@ final class CandidateBarView: UIView {
         expandButton.setImage(
             UIImage(
                 systemName: "chevron.down",
-                withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+                withConfiguration: UIImage.SymbolConfiguration(pointSize: Self.expandSymbolPointSize, weight: .medium)
             ),
             for: .normal
         )
         expandButton.tintColor = .label
-        expandButton.backgroundColor = KeyboardButton.standardKeyColor
-        expandButton.layer.cornerRadius = 10
-        expandButton.layer.cornerCurve = .continuous
+        expandButton.backgroundColor = .clear
         expandButton.accessibilityIdentifier = "candidate-expand-toggle"
         expandButton.accessibilityLabel = "展開候選字"
         expandButton.isEnabled = false
         expandButton.alpha = 0.4
+        expandButton.isHidden = true
         expandButton.translatesAutoresizingMaskIntoConstraints = false
         expandButton.addAction(
             UIAction { [weak self] _ in
@@ -60,6 +63,12 @@ final class CandidateBarView: UIView {
         )
         addSubview(expandButton)
 
+        dividerView.backgroundColor = .separator
+        dividerView.isAccessibilityElement = false
+        dividerView.isHidden = true
+        dividerView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(dividerView)
+
         stackView.axis = .horizontal
         stackView.alignment = .fill
         stackView.spacing = Self.collapsedSpacing
@@ -68,9 +77,13 @@ final class CandidateBarView: UIView {
 
         NSLayoutConstraint.activate([
             scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: expandButton.leadingAnchor, constant: -4),
+            scrollView.trailingAnchor.constraint(equalTo: dividerView.leadingAnchor, constant: -8),
             scrollView.topAnchor.constraint(equalTo: topAnchor),
             scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            dividerView.trailingAnchor.constraint(equalTo: expandButton.leadingAnchor, constant: -8),
+            dividerView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            dividerView.widthAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
+            dividerView.heightAnchor.constraint(equalToConstant: Self.dividerHeight),
             expandButton.trailingAnchor.constraint(equalTo: trailingAnchor),
             expandButton.centerYAnchor.constraint(equalTo: centerYAnchor),
             expandButton.widthAnchor.constraint(equalToConstant: 36),
@@ -113,6 +126,9 @@ final class CandidateBarView: UIView {
             }
         }
         let hasCandidates = !candidates.isEmpty
+        self.hasCandidates = hasCandidates
+        expandButton.isHidden = !hasCandidates
+        dividerView.isHidden = !hasCandidates || isExpanded
         expandButton.isEnabled = hasCandidates
         expandButton.alpha = hasCandidates ? 1 : 0.4
     }
@@ -127,11 +143,12 @@ final class CandidateBarView: UIView {
         expandButton.setImage(
             UIImage(
                 systemName: symbol,
-                withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+                withConfiguration: UIImage.SymbolConfiguration(pointSize: Self.expandSymbolPointSize, weight: .medium)
             ),
             for: .normal
         )
         expandButton.accessibilityLabel = expanded ? "收合候選字" : "展開候選字"
+        dividerView.isHidden = expanded || !hasCandidates
         scrollView.isScrollEnabled = !expanded
         scrollView.contentOffset = .zero
         setExtrasAccessibilityHidden(expanded)
