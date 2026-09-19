@@ -31,7 +31,6 @@ class KeyboardButton: UIButton {
         didSet { updateAppearance() }
     }
 
-    private let materialView = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
     private let tintView = UIView()
 
     override var isHighlighted: Bool {
@@ -44,17 +43,11 @@ class KeyboardButton: UIButton {
         layer.cornerCurve = .continuous
         clipsToBounds = false
 
-        materialView.isUserInteractionEnabled = false
-        materialView.layer.cornerRadius = 11
-        materialView.layer.cornerCurve = .continuous
-        materialView.clipsToBounds = true
-        insertSubview(materialView, at: 0)
-
         tintView.isUserInteractionEnabled = false
         tintView.layer.cornerRadius = 11
         tintView.layer.cornerCurve = .continuous
         tintView.clipsToBounds = true
-        materialView.contentView.addSubview(tintView)
+        insertSubview(tintView, at: 0)
 
         titleLabel?.font = .systemFont(ofSize: 20, weight: .regular)
         setTitleColor(.label, for: .normal)
@@ -73,9 +66,8 @@ class KeyboardButton: UIButton {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        sendSubviewToBack(materialView)
-        materialView.frame = bounds
-        tintView.frame = materialView.bounds
+        sendSubviewToBack(tintView)
+        tintView.frame = bounds
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -88,9 +80,6 @@ class KeyboardButton: UIButton {
         tintView.backgroundColor = isHighlighted
             ? normalColor.withAlphaComponent(0.78)
             : normalColor
-        materialView.effect = UIBlurEffect(
-            style: isHighlighted ? .systemThinMaterial : .systemUltraThinMaterial
-        )
         transform = isHighlighted
             ? CGAffineTransform(scaleX: 0.97, y: 0.97)
             : .identity

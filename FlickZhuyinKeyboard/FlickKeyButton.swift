@@ -212,7 +212,7 @@ private final class FlickPreviewOptionView: UIView {
         didSet { updateAppearance() }
     }
 
-    private let materialView = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+    private let materialView = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
     private let tintView = UIView()
     private let label = UILabel()
 
