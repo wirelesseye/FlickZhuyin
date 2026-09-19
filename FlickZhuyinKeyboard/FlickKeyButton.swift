@@ -206,9 +206,16 @@ private final class FlickPreviewOptionView: UIView {
         tintView.isUserInteractionEnabled = false
         materialView.contentView.addSubview(tintView)
 
-        label.text = symbol
         label.textAlignment = .center
-        label.font = .systemFont(ofSize: symbol.count > 1 ? 15 : 22, weight: .medium)
+        if ToneSymbolStyle.isToneSymbol(symbol) {
+            label.attributedText = ToneSymbolStyle.attributedText(
+                for: symbol,
+                fontSize: ToneSymbolStyle.previewFontSize
+            )
+        } else {
+            label.text = symbol
+            label.font = .systemFont(ofSize: symbol.count > 1 ? 15 : 22, weight: .medium)
+        }
         materialView.contentView.addSubview(label)
         updateAppearance()
     }

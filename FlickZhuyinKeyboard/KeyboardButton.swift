@@ -96,3 +96,43 @@ class KeyboardButton: UIButton {
             : .identity
     }
 }
+
+enum ToneSymbolStyle {
+    static let previewFontSize: CGFloat = 28
+    static let keyFontSize: CGFloat = 26
+
+    private static let symbols = Set(MandarinTone.allCases.map(\.symbol))
+
+    static func isToneSymbol(_ symbol: String) -> Bool {
+        symbols.contains(symbol)
+    }
+
+    // modifier letters 的字形偏上，需下移（負值）拉回視覺中央。
+    // 下方數值以 previewFontSize 為基準調校，其餘字級等比縮放；請在模擬器上微調。
+    static func baselineOffset(for symbol: String, fontSize: CGFloat) -> CGFloat {
+        let base: CGFloat =
+            switch symbol {
+            case "ˉ": -9
+            case "ˊ": -9
+            case "ˇ": -7
+            case "ˋ": -9
+            case "˙": -6
+            default: 0
+            }
+        return base * fontSize / previewFontSize
+    }
+
+    static func attributedText(
+        for symbol: String,
+        fontSize: CGFloat,
+        weight: UIFont.Weight = .medium
+    ) -> NSAttributedString {
+        NSAttributedString(
+            string: symbol,
+            attributes: [
+                .font: UIFont.systemFont(ofSize: fontSize, weight: weight),
+                .baselineOffset: baselineOffset(for: symbol, fontSize: fontSize)
+            ]
+        )
+    }
+}

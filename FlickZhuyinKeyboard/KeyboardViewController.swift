@@ -455,8 +455,13 @@ final class KeyboardViewController: UIInputViewController {
                 button.setTitle(engine.mode == .zhuyin ? "ABC" : "中", for: .normal)
                 button.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
             case let .tone(tone):
-                button.setTitle(tone.symbol, for: .normal)
-                button.titleLabel?.font = .systemFont(ofSize: 20, weight: .medium)
+                button.setAttributedTitle(
+                    ToneSymbolStyle.attributedText(
+                        for: tone.symbol,
+                        fontSize: ToneSymbolStyle.keyFontSize
+                    ),
+                    for: .normal
+                )
             case .nextKeyboard, .zhuyin:
                 break
             }
