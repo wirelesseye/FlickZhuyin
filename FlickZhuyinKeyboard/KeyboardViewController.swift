@@ -131,7 +131,7 @@ final class KeyboardViewController: UIInputViewController {
         spaceRow.addArrangedSubview(neutralToneButton)
         self.neutralToneButton = neutralToneButton
         spaceRow.addArrangedSubview(makeToneControl())
-        spaceRow.addArrangedSubview(makeGridSpacer())
+        spaceRow.addArrangedSubview(makePunctuationControl())
         spaceRow.addArrangedSubview(makeGridSpacer())
         grid.addArrangedSubview(spaceRow)
         mainStack.addArrangedSubview(grid)
@@ -161,6 +161,42 @@ final class KeyboardViewController: UIInputViewController {
         button.accessibilityLabel = "空白或音調"
         toneButton = button
         return button
+    }
+
+    private func makePunctuationControl() -> FlickKeyButton {
+        let mapping = ZhuyinLayout.punctuation
+        let symbols = mappingSymbols(mapping)
+        let button = makeFlickButton(mapping: mapping) { [weak self] direction in
+            guard let symbol = mapping[direction] else { return }
+            self?.insertPunctuation(symbol)
+        }
+        button.setAttributedTitle(
+            NSAttributedString(
+                string: symbols,
+                attributes: [
+                    .font: UIFont.systemFont(ofSize: 18),
+                    .kern: -4.5,
+                    .foregroundColor: UIColor.label
+                ]
+            ),
+            for: .normal
+        )
+        button.titleLabel?.adjustsFontSizeToFitWidth = true
+        button.titleLabel?.minimumScaleFactor = 0.7
+        button.accessibilityLabel = symbols
+        return button
+    }
+
+    private func mappingSymbols(_ mapping: FlickKeyMapping) -> String {
+        FlickDirection.allCases.compactMap { mapping[$0] }.joined()
+    }
+
+    private func insertPunctuation(_ symbol: String) {
+        if engine.hasMarkedText {
+            apply(engine.update(for: .return))
+        }
+        apply(KeyboardUpdate(documentEffects: [.insertText(symbol)]))
+        refreshUI()
     }
 
     private func pinnedVerticalStack(spacing: CGFloat) -> UIStackView {

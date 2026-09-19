@@ -68,6 +68,14 @@ final class KeyboardEngineTests: XCTestCase {
         XCTAssertNil(ZhuyinLayout.tone(for: .down))
     }
 
+    func testPunctuationFlickMapping() {
+        XCTAssertEqual(ZhuyinLayout.punctuation[.center], "，")
+        XCTAssertEqual(ZhuyinLayout.punctuation[.left], "。")
+        XCTAssertEqual(ZhuyinLayout.punctuation[.up], "？")
+        XCTAssertEqual(ZhuyinLayout.punctuation[.right], "！")
+        XCTAssertNil(ZhuyinLayout.punctuation[.down])
+    }
+
     func testZhuyinInputMarksTextAndRequestsCandidates() {
         var engine = KeyboardEngine()
         XCTAssertEqual(
