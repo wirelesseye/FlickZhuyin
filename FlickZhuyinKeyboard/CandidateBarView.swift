@@ -85,6 +85,7 @@ final class CandidateBarView: UIView {
                 else {
                     return
                 }
+                KeyHaptics.keyDown()
                 self.onSelect?(match)
             },
             for: .touchUpInside

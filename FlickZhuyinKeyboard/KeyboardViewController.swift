@@ -20,6 +20,7 @@ final class KeyboardViewController: UIInputViewController {
         super.viewDidLoad()
         view.isOpaque = false
         view.backgroundColor = .clear
+        KeyHaptics.prepare()
         configureHeight()
         rebuildKeyboard()
     }

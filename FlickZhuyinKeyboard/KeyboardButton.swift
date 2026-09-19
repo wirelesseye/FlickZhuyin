@@ -1,5 +1,25 @@
 import UIKit
 
+enum KeyHaptics {
+    private static let impact = UIImpactFeedbackGenerator(style: .light)
+    private static let selection = UISelectionFeedbackGenerator()
+
+    static func prepare() {
+        impact.prepare()
+        selection.prepare()
+    }
+
+    static func keyDown() {
+        impact.impactOccurred()
+        impact.prepare()
+    }
+
+    static func selectionChanged() {
+        selection.selectionChanged()
+        selection.prepare()
+    }
+}
+
 class KeyboardButton: UIButton {
     static let standardKeyColor = UIColor { traits in
         traits.userInterfaceStyle == .dark
@@ -43,6 +63,12 @@ class KeyboardButton: UIButton {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
+        guard super.beginTracking(touch, with: event) else { return false }
+        KeyHaptics.keyDown()
+        return true
     }
 
     override func layoutSubviews() {

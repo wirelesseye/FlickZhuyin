@@ -9,6 +9,7 @@ final class FlickKeyButton: KeyboardButton {
     weak var overlayHost: UIView?
 
     private var startPoint = CGPoint.zero
+    private var activeDirection: FlickDirection = .center
     private var preview: FlickPreviewView?
 
     init(mapping: FlickKeyMapping) {
@@ -24,6 +25,7 @@ final class FlickKeyButton: KeyboardButton {
     override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
         guard super.beginTracking(touch, with: event) else { return false }
         startPoint = touch.location(in: self)
+        activeDirection = .center
         isHighlighted = true
         showPreview(selected: .center)
         return true
@@ -35,7 +37,12 @@ final class FlickKeyButton: KeyboardButton {
             deltaX: Double(point.x - startPoint.x),
             deltaY: Double(point.y - startPoint.y)
         )
-        preview?.selectedDirection = mapping[direction] == nil ? nil : direction
+        let active = mapping[direction] == nil ? nil : direction
+        preview?.selectedDirection = active
+        if let active, active != activeDirection {
+            activeDirection = active
+            KeyHaptics.selectionChanged()
+        }
         return true
     }
 

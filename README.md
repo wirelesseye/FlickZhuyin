@@ -15,7 +15,7 @@ FlickZhuyin 是一個實驗性的 iOS 自訂注音鍵盤，使用類似日文假
 - Shift、Caps Lock、刪除、空白與 Return
 - iPhone 直向與橫向版面
 - 深色及淺色模式
-- 不需要「允許完整取用」
+- 按鍵與 Flick 方向切換的觸覺回饋（需要「允許完整取用」）
 
 ## 系統需求
 
@@ -33,9 +33,10 @@ FlickZhuyin 是一個實驗性的 iOS 自訂注音鍵盤，使用類似日文假
 4. 開啟 iOS「設定」。
 5. 前往「一般」→「鍵盤」→「鍵盤」→「新增鍵盤」。
 6. 選擇 FlickZhuyin。
-7. 在文字欄中使用地球鍵切換至 FlickZhuyin。
+7. 返回鍵盤列表，點選 FlickZhuyin，開啟「允許完整取用」並確認授權。這是第三方鍵盤觸發觸覺回饋所需的權限。
+8. 在文字欄中使用地球鍵切換至 FlickZhuyin。
 
-鍵盤不需要開啟「允許完整取用」。容器 App 本身只提供一個文字欄，方便測試鍵盤。
+若未開啟「允許完整取用」，鍵盤仍可輸入，但按鍵與 Flick 方向切換不會產生觸覺回饋。容器 App 本身只提供一個文字欄，方便測試鍵盤。
 
 ## 注音模式
 
@@ -238,11 +239,13 @@ python3 Tools/DictionaryCompiler/compile_dictionary.py build \
 
 FlickZhuyin Keyboard Extension：
 
-- 不要求 Full Access
+- 僅為觸覺回饋要求 Full Access
 - 不使用網路
 - 不儲存或傳送輸入內容
 - 只以唯讀模式查詢 App bundle 內建的 SQLite 詞庫，不寫入資料庫
 - 不使用 App Group、共享容器或雲端同步
+
+開啟 Full Access 會解除 iOS 對第三方鍵盤的部分系統限制，但 FlickZhuyin 不會藉此讀取、儲存或傳送使用者輸入內容。
 
 ## 尚未支援
 
@@ -250,5 +253,5 @@ FlickZhuyin Keyboard Extension：
 - 使用者詞典、學習與持久化
 - 簡繁轉換
 - 數字及符號頁面
-- 按鍵音、觸覺回饋與長按刪除
+- 按鍵音與長按刪除
 - iPad 專用版面
