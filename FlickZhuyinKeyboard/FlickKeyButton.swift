@@ -11,6 +11,7 @@ final class FlickKeyButton: KeyboardButton {
     private var startPoint = CGPoint.zero
     private var activeDirection: FlickDirection = .center
     private var preview: FlickPreviewView?
+    private var dimmedButtonStates: [DimmedButtonState] = []
 
     init(mapping: FlickKeyMapping) {
         self.mapping = mapping
@@ -70,10 +71,12 @@ final class FlickKeyButton: KeyboardButton {
 
     private func showPreview(selected: FlickDirection) {
         guard showsPreview, let overlayHost else { return }
+        dimOtherButtons(in: overlayHost)
+
         let preview = FlickPreviewView(mapping: mapping)
         let keyFrame = convert(bounds, to: overlayHost)
-        let cellWidth = keyFrame.width
-        let cellHeight = min(keyFrame.height, 52)
+        let cellWidth = keyFrame.width * 1.18
+        let cellHeight = min(keyFrame.height * 1.18, 62)
         let size = CGSize(width: cellWidth * 3, height: cellHeight * 3)
         let origin = CGPoint(x: keyFrame.midX - size.width / 2, y: keyFrame.midY - size.height / 2)
         preview.frame = CGRect(origin: origin, size: size)
@@ -85,6 +88,45 @@ final class FlickKeyButton: KeyboardButton {
     private func hidePreview() {
         preview?.removeFromSuperview()
         preview = nil
+        restoreDimmedButtons()
+    }
+
+    private func dimOtherButtons(in rootView: UIView) {
+        dimmedButtonStates = rootView.allDescendants(of: UIButton.self)
+            .filter { $0 !== self }
+            .map { button in
+                let state = DimmedButtonState(
+                    button: button,
+                    titleAlpha: button.titleLabel?.alpha ?? 1,
+                    imageAlpha: button.imageView?.alpha ?? 1
+                )
+                button.titleLabel?.alpha = 0.35
+                button.imageView?.alpha = 0.35
+                return state
+            }
+    }
+
+    private func restoreDimmedButtons() {
+        for state in dimmedButtonStates {
+            state.button.titleLabel?.alpha = state.titleAlpha
+            state.button.imageView?.alpha = state.imageAlpha
+        }
+        dimmedButtonStates.removeAll()
+    }
+}
+
+private struct DimmedButtonState {
+    let button: UIButton
+    let titleAlpha: CGFloat
+    let imageAlpha: CGFloat
+}
+
+private extension UIView {
+    func allDescendants<T: UIView>(of type: T.Type) -> [T] {
+        subviews.flatMap { subview in
+            let current = subview as? T
+            return (current.map { [$0] } ?? []) + subview.allDescendants(of: type)
+        }
     }
 }
 
@@ -101,7 +143,7 @@ private final class FlickPreviewView: UIView {
 
         for direction in FlickDirection.allCases {
             guard let symbol = mapping[direction] else { continue }
-            let option = FlickPreviewOptionView(symbol: symbol)
+            let option = FlickPreviewOptionView(symbol: symbol, direction: direction)
             addSubview(option)
             options[direction] = option
         }
@@ -121,10 +163,10 @@ private final class FlickPreviewView: UIView {
         for (direction, option) in options {
             guard let position = positions[direction] else { continue }
             option.frame = CGRect(
-                x: CGFloat(position.0) * cell.width + 2,
-                y: CGFloat(position.1) * cell.height + 2,
-                width: cell.width - 4,
-                height: cell.height - 4
+                x: CGFloat(position.0) * cell.width,
+                y: CGFloat(position.1) * cell.height,
+                width: cell.width,
+                height: cell.height
             )
         }
     }
@@ -145,13 +187,12 @@ private final class FlickPreviewOptionView: UIView {
     private let tintView = UIView()
     private let label = UILabel()
 
-    init(symbol: String) {
+    init(symbol: String, direction: FlickDirection) {
         super.init(frame: .zero)
 
-        layer.cornerRadius = 10
+        layer.cornerRadius = 11
         layer.cornerCurve = .continuous
-        layer.borderWidth = 0.5
-        layer.borderColor = UIColor.separator.cgColor
+        layer.maskedCorners = Self.maskedCorners(for: direction)
         clipsToBounds = true
 
         materialView.isUserInteractionEnabled = false
@@ -180,8 +221,27 @@ private final class FlickPreviewOptionView: UIView {
 
     private func updateAppearance() {
         tintView.backgroundColor = isSelected
-            ? UIColor.systemBlue.withAlphaComponent(0.86)
-            : UIColor.systemBackground.withAlphaComponent(0.82)
-        label.textColor = isSelected ? .white : .label
+            ? UIColor { traits in
+                traits.userInterfaceStyle == .dark
+                    ? UIColor(white: 0.48, alpha: 1)
+                    : UIColor(white: 0.84, alpha: 1)
+            }
+            : KeyboardButton.standardKeyColor
+        label.textColor = .label
+    }
+
+    private static func maskedCorners(for direction: FlickDirection) -> CACornerMask {
+        switch direction {
+        case .center:
+            return []
+        case .up:
+            return [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        case .down:
+            return [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+        case .left:
+            return [.layerMinXMinYCorner, .layerMinXMaxYCorner]
+        case .right:
+            return [.layerMaxXMinYCorner, .layerMaxXMaxYCorner]
+        }
     }
 }
