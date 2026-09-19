@@ -16,12 +16,15 @@ final class CandidateBarView: UIView {
     private static let collapsedSpacing: CGFloat = 2
     private static let contentInset: CGFloat = 4
     private static let expandSymbolPointSize: CGFloat = 13
+    private static let expandButtonLeadingInset: CGFloat = 8
+    private static let expandButtonContentWidth: CGFloat = 36
     private static let dividerHeight: CGFloat = 20
 
     private let scrollView = UIScrollView()
     private let stackView = UIStackView()
     private let expandButton = UIButton(type: .system)
     private let dividerView = UIView()
+    private let hitSurfaceView = UIView()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -47,6 +50,12 @@ final class CandidateBarView: UIView {
         )
         expandButton.tintColor = .label
         expandButton.backgroundColor = .clear
+        expandButton.contentEdgeInsets = UIEdgeInsets(
+            top: 0,
+            left: Self.expandButtonLeadingInset,
+            bottom: 0,
+            right: 0
+        )
         expandButton.accessibilityIdentifier = "candidate-expand-toggle"
         expandButton.accessibilityLabel = "展開候選字"
         expandButton.isEnabled = false
@@ -54,20 +63,24 @@ final class CandidateBarView: UIView {
         expandButton.isHidden = true
         expandButton.translatesAutoresizingMaskIntoConstraints = false
         expandButton.addAction(
-            UIAction { [weak self] _ in
-                guard let self else { return }
-                KeyHaptics.keyDown()
-                self.onToggleExpansion?()
-            },
+            UIAction { [weak self] _ in self?.toggleExpansion() },
             for: .touchUpInside
         )
         addSubview(expandButton)
 
         dividerView.backgroundColor = .separator
         dividerView.isAccessibilityElement = false
+        dividerView.isUserInteractionEnabled = false
         dividerView.isHidden = true
         dividerView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(dividerView)
+
+        // Keyboard extensions are hosted in a remote window whose input region can
+        // omit fully transparent pixels. Render an imperceptible surface so the
+        // whole area to the right of the divider remains part of that input region.
+        hitSurfaceView.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.02)
+        hitSurfaceView.isUserInteractionEnabled = false
+        insertSubview(hitSurfaceView, belowSubview: expandButton)
 
         stackView.axis = .horizontal
         stackView.alignment = .fill
@@ -80,13 +93,15 @@ final class CandidateBarView: UIView {
             scrollView.trailingAnchor.constraint(equalTo: dividerView.leadingAnchor, constant: -8),
             scrollView.topAnchor.constraint(equalTo: topAnchor),
             scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
-            dividerView.trailingAnchor.constraint(equalTo: expandButton.leadingAnchor, constant: -8),
+            dividerView.trailingAnchor.constraint(equalTo: expandButton.leadingAnchor),
             dividerView.centerYAnchor.constraint(equalTo: centerYAnchor),
             dividerView.widthAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
             dividerView.heightAnchor.constraint(equalToConstant: Self.dividerHeight),
             expandButton.trailingAnchor.constraint(equalTo: trailingAnchor),
             expandButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            expandButton.widthAnchor.constraint(equalToConstant: 36),
+            expandButton.widthAnchor.constraint(
+                equalToConstant: Self.expandButtonLeadingInset + Self.expandButtonContentWidth
+            ),
             expandButton.heightAnchor.constraint(equalTo: heightAnchor),
             stackView.leadingAnchor.constraint(
                 equalTo: scrollView.contentLayoutGuide.leadingAnchor,
@@ -178,11 +193,34 @@ final class CandidateBarView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        hitSurfaceView.frame = CGRect(
+            x: dividerView.frame.maxX,
+            y: bounds.minY,
+            width: max(0, bounds.maxX - dividerView.frame.maxX),
+            height: bounds.height
+        )
         guard !isTransitioningExpansion, !isAdjustingLayout else { return }
         updateVisibleCandidateCount()
         if isExpanded {
             applyExpandedSpacing()
         }
+    }
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let isInExpansionRegion =
+            !expandButton.isHidden
+            && expandButton.isEnabled
+            && bounds.contains(point)
+            && point.x >= dividerView.frame.maxX
+
+        guard isInExpansionRegion else { return super.hitTest(point, with: event) }
+
+        return expandButton
+    }
+
+    private func toggleExpansion() {
+        KeyHaptics.keyDown()
+        onToggleExpansion?()
     }
 
     private func updateVisibleCandidateCount() {
