@@ -325,9 +325,15 @@ final class KeyboardViewController: UIInputViewController {
                 button.setTitle(nil, for: .normal)
                 button.setImage(nil, for: .normal)
             case .return:
-                button.setTitle(nil, for: .normal)
-                button.setImage(keyIcon(named: "arrow.turn.down.left"), for: .normal)
-                button.tintColor = .label
+                if engine.mode == .zhuyin, engine.hasMarkedText {
+                    button.setImage(nil, for: .normal)
+                    button.setTitle("確定", for: .normal)
+                    button.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
+                } else {
+                    button.setTitle(nil, for: .normal)
+                    button.setImage(keyIcon(named: "arrow.turn.down.left"), for: .normal)
+                    button.tintColor = .label
+                }
             case .modeSwitch:
                 button.setTitle(engine.mode == .zhuyin ? "ABC" : "中", for: .normal)
                 button.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)

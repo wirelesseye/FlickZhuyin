@@ -22,6 +22,10 @@ struct KeyboardEngine: Sendable {
         !composition.pendingTokens.isEmpty
     }
 
+    var hasMarkedText: Bool {
+        !composition.isEmpty
+    }
+
     mutating func update(
         for key: KeyboardKey,
         at timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime
