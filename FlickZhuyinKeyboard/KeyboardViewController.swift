@@ -121,7 +121,7 @@ final class KeyboardViewController: UIInputViewController {
             let row = makeRow()
             let leadingColumn: UIView = switch rowIndex {
             case 1: makeButton(for: .cursorLeft)
-            case 2: makeButton(for: .modeSwitch)
+            case 2: makeEmojiButton()
             default: makeGridSpacer()
             }
             row.addArrangedSubview(leadingColumn)
@@ -142,7 +142,7 @@ final class KeyboardViewController: UIInputViewController {
         }
 
         let spaceRow = makeRow()
-        spaceRow.addArrangedSubview(makeGridSpacer())
+        spaceRow.addArrangedSubview(makeButton(for: .modeSwitch))
         let neutralToneButton = makeSecondaryPunctuationControl()
         spaceRow.addArrangedSubview(neutralToneButton)
         self.neutralToneButton = neutralToneButton
@@ -172,6 +172,16 @@ final class KeyboardViewController: UIInputViewController {
         spacer.backgroundColor = .clear
         spacer.accessibilityElementsHidden = true
         return spacer
+    }
+
+    private func makeEmojiButton() -> KeyboardButton {
+        // TODO: picks up custom emoji picker in the future; placeholder for now.
+        let button = KeyboardButton(type: .system)
+        button.setImage(keyIcon(named: "face.smiling"), for: .normal)
+        button.tintColor = .label
+        button.normalColor = KeyboardButton.standardKeyColor
+        button.accessibilityLabel = "表情符號"
+        return button
     }
 
     private func makeToneControl() -> FlickKeyButton {
@@ -452,8 +462,15 @@ final class KeyboardViewController: UIInputViewController {
             toneButton?.showsPreview = hasPending
             if hasPending {
                 toneButton?.setImage(nil, for: .normal)
-                toneButton?.setTitle("調", for: .normal)
+                toneButton?.setAttributedTitle(
+                    ToneSymbolStyle.attributedText(
+                        for: MandarinTone.first.symbol,
+                        fontSize: ToneSymbolStyle.keyFontSize
+                    ),
+                    for: .normal
+                )
             } else {
+                toneButton?.setAttributedTitle(nil, for: .normal)
                 toneButton?.setTitle(nil, for: .normal)
                 toneButton?.setImage(keyIcon(named: "space"), for: .normal)
                 toneButton?.tintColor = .label
