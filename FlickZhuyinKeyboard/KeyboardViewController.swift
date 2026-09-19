@@ -1,13 +1,18 @@
 import UIKit
 
 final class KeyboardViewController: UIInputViewController {
+    private static let maximumCandidateCount = 30
+
     private var engine = KeyboardEngine()
     private var keyButtons: [(key: KeyboardKey, button: KeyboardButton)] = []
     private weak var nextKeyboardButton: KeyboardButton?
     private weak var candidateBar: CandidateBarView?
+    private weak var expandedCandidatesView: ExpandedCandidateView?
+    private weak var keyGrid: UIStackView?
     private weak var toneButton: FlickKeyButton?
     private weak var neutralToneButton: KeyboardButton?
     private var heightConstraint: NSLayoutConstraint?
+    private var isCandidateListExpanded = false
     private var documentEffectDepth = 0
 
     private var coordinator: ChineseInputCoordinator?
@@ -50,8 +55,11 @@ final class KeyboardViewController: UIInputViewController {
         keyButtons.removeAll(keepingCapacity: true)
         nextKeyboardButton = nil
         candidateBar = nil
+        expandedCandidatesView = nil
+        keyGrid = nil
         toneButton = nil
         neutralToneButton = nil
+        isCandidateListExpanded = false
 
         switch engine.mode {
         case .zhuyin: buildZhuyinKeyboard()
@@ -96,6 +104,10 @@ final class KeyboardViewController: UIInputViewController {
 
         let candidateBar = CandidateBarView()
         candidateBar.onSelect = { [weak self] candidate in self?.select(candidate) }
+        candidateBar.onToggleExpansion = { [weak self] in self?.toggleCandidateExpansion() }
+        candidateBar.onVisibleCandidatesChanged = { [weak self] _ in
+            self?.refreshExpandedCandidates()
+        }
         candidateBar.heightAnchor.constraint(equalToConstant: 40).isActive = true
         mainStack.addArrangedSubview(candidateBar)
         self.candidateBar = candidateBar
@@ -104,6 +116,7 @@ final class KeyboardViewController: UIInputViewController {
         grid.axis = .vertical
         grid.spacing = 7
         grid.distribution = .fillEqually
+        keyGrid = grid
         for rowIndex in 0..<3 {
             let row = makeRow()
             let leadingColumn: UIView = switch rowIndex {
@@ -138,6 +151,19 @@ final class KeyboardViewController: UIInputViewController {
         spaceRow.addArrangedSubview(makeGridSpacer())
         grid.addArrangedSubview(spaceRow)
         mainStack.addArrangedSubview(grid)
+
+        let expandedCandidates = ExpandedCandidateView()
+        expandedCandidates.onSelect = { [weak self] candidate in self?.select(candidate) }
+        expandedCandidates.isHidden = true
+        expandedCandidates.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(expandedCandidates)
+        NSLayoutConstraint.activate([
+            expandedCandidates.leadingAnchor.constraint(equalTo: grid.leadingAnchor),
+            expandedCandidates.trailingAnchor.constraint(equalTo: grid.trailingAnchor),
+            expandedCandidates.topAnchor.constraint(equalTo: grid.topAnchor),
+            expandedCandidates.bottomAnchor.constraint(equalTo: grid.bottomAnchor)
+        ])
+        expandedCandidatesView = expandedCandidates
     }
 
     private func makeGridSpacer() -> UIView {
@@ -281,8 +307,35 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func select(_ candidate: InputCandidate) {
+        setCandidateListExpanded(false)
         apply(engine.selectCandidate(candidate))
         refreshUI()
+    }
+
+    private func toggleCandidateExpansion() {
+        setCandidateListExpanded(!isCandidateListExpanded)
+    }
+
+    private func setCandidateListExpanded(_ expanded: Bool) {
+        guard isCandidateListExpanded != expanded else { return }
+        isCandidateListExpanded = expanded
+        expandedCandidatesView?.isHidden = !expanded
+        keyGrid?.isUserInteractionEnabled = !expanded
+        keyGrid?.accessibilityElementsHidden = expanded
+        if expanded {
+            refreshExpandedCandidates()
+            view.layoutIfNeeded()
+            expandedCandidatesView?.prepareForEntrance()
+            candidateBar?.setExpanded(true)
+            expandedCandidatesView?.animateEntrance()
+        } else {
+            expandedCandidatesView?.resetEntranceState()
+            candidateBar?.setExpanded(false)
+        }
+        UIView.animate(withDuration: CandidateBarView.animationDuration) {
+            self.keyGrid?.alpha = expanded ? 0 : 1
+        }
+        view.setNeedsLayout()
     }
 
     private func apply(_ update: KeyboardUpdate) {
@@ -309,7 +362,20 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func refreshCandidates() {
-        candidateBar?.update(with: coordinator?.candidates ?? [])
+        let candidates = coordinator?.candidates ?? []
+        candidateBar?.update(with: candidates)
+        refreshExpandedCandidates()
+        if candidates.isEmpty {
+            setCandidateListExpanded(false)
+        }
+    }
+
+    private func refreshExpandedCandidates() {
+        guard isCandidateListExpanded else { return }
+        let candidates = coordinator?.candidates ?? []
+        let visibleCount = candidateBar?.visibleCandidateCount ?? 0
+        let start = min(visibleCount, candidates.count)
+        expandedCandidatesView?.update(with: Array(candidates.dropFirst(start)))
     }
 
     private func resolvedCoordinator() -> ChineseInputCoordinator {
@@ -317,7 +383,14 @@ final class KeyboardViewController: UIInputViewController {
             return coordinator
         }
         let coordinator = ChineseInputCoordinator { [bundle = Bundle.main] in
-            try LexiconChineseInputPipeline(bundle: bundle)
+            try LexiconChineseInputPipeline(
+                bundle: bundle,
+                decoder: Decoder(
+                    configuration: DecoderConfiguration(
+                        maximumCandidates: Self.maximumCandidateCount
+                    )
+                )
+            )
         }
         coordinator.onChange = { [weak self] in self?.refreshCandidates() }
         self.coordinator = coordinator

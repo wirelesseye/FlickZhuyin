@@ -2,10 +2,22 @@ import UIKit
 
 final class CandidateBarView: UIView {
     var onSelect: ((InputCandidate) -> Void)?
+    var onToggleExpansion: (() -> Void)?
+    var onVisibleCandidatesChanged: ((Int) -> Void)?
+
+    private(set) var isExpanded = false
+    private(set) var visibleCandidateCount = 0
+    private var isTransitioningExpansion = false
+    private var isAdjustingLayout = false
+
+    static let animationDuration: TimeInterval = 0.25
+
+    private static let collapsedSpacing: CGFloat = 2
+    private static let contentInset: CGFloat = 4
 
     private let scrollView = UIScrollView()
     private let stackView = UIStackView()
-    private var candidates: [InputCandidate] = []
+    private let expandButton = UIButton(type: .system)
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -22,24 +34,54 @@ final class CandidateBarView: UIView {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(scrollView)
 
+        expandButton.setImage(
+            UIImage(
+                systemName: "chevron.down",
+                withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+            ),
+            for: .normal
+        )
+        expandButton.tintColor = .label
+        expandButton.backgroundColor = KeyboardButton.standardKeyColor
+        expandButton.layer.cornerRadius = 10
+        expandButton.layer.cornerCurve = .continuous
+        expandButton.accessibilityIdentifier = "candidate-expand-toggle"
+        expandButton.accessibilityLabel = "展開候選字"
+        expandButton.isEnabled = false
+        expandButton.alpha = 0.4
+        expandButton.translatesAutoresizingMaskIntoConstraints = false
+        expandButton.addAction(
+            UIAction { [weak self] _ in
+                guard let self else { return }
+                KeyHaptics.keyDown()
+                self.onToggleExpansion?()
+            },
+            for: .touchUpInside
+        )
+        addSubview(expandButton)
+
         stackView.axis = .horizontal
         stackView.alignment = .fill
-        stackView.spacing = 2
+        stackView.spacing = Self.collapsedSpacing
         stackView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.addSubview(stackView)
 
         NSLayoutConstraint.activate([
             scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: expandButton.leadingAnchor, constant: -4),
             scrollView.topAnchor.constraint(equalTo: topAnchor),
             scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            expandButton.trailingAnchor.constraint(equalTo: trailingAnchor),
+            expandButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            expandButton.widthAnchor.constraint(equalToConstant: 36),
+            expandButton.heightAnchor.constraint(equalTo: heightAnchor),
             stackView.leadingAnchor.constraint(
                 equalTo: scrollView.contentLayoutGuide.leadingAnchor,
-                constant: 4
+                constant: Self.contentInset
             ),
             stackView.trailingAnchor.constraint(
                 equalTo: scrollView.contentLayoutGuide.trailingAnchor,
-                constant: -4
+                constant: -Self.contentInset
             ),
             stackView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
             stackView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
@@ -52,8 +94,9 @@ final class CandidateBarView: UIView {
     }
 
     func update(with candidates: [InputCandidate]) {
-        self.candidates = candidates
         UIView.performWithoutAnimation {
+            isAdjustingLayout = true
+            defer { isAdjustingLayout = false }
             for view in stackView.arrangedSubviews {
                 stackView.removeArrangedSubview(view)
                 view.removeFromSuperview()
@@ -62,38 +105,152 @@ final class CandidateBarView: UIView {
                 stackView.addArrangedSubview(makeButton(for: candidate))
             }
             scrollView.contentOffset = .zero
-            stackView.layoutIfNeeded()
+            stackView.spacing = Self.collapsedSpacing
             layoutIfNeeded()
+            updateVisibleCandidateCount()
+            if isExpanded {
+                applyExpandedPresentation()
+            }
+        }
+        let hasCandidates = !candidates.isEmpty
+        expandButton.isEnabled = hasCandidates
+        expandButton.alpha = hasCandidates ? 1 : 0.4
+    }
+
+    func setExpanded(_ expanded: Bool, completion: (() -> Void)? = nil) {
+        guard isExpanded != expanded else {
+            completion?()
+            return
+        }
+        isExpanded = expanded
+        let symbol = expanded ? "chevron.up" : "chevron.down"
+        expandButton.setImage(
+            UIImage(
+                systemName: symbol,
+                withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+            ),
+            for: .normal
+        )
+        expandButton.accessibilityLabel = expanded ? "收合候選字" : "展開候選字"
+        scrollView.isScrollEnabled = !expanded
+        scrollView.contentOffset = .zero
+        setExtrasAccessibilityHidden(expanded)
+        isTransitioningExpansion = true
+        UIView.animate(
+            withDuration: Self.animationDuration,
+            delay: 0,
+            options: [.curveEaseInOut],
+            animations: {
+                if expanded {
+                    self.applyExpandedSpacing()
+                } else {
+                    self.stackView.spacing = Self.collapsedSpacing
+                }
+                self.stackView.layoutIfNeeded()
+            },
+            completion: { [weak self] _ in
+                guard let self else { return }
+                self.isTransitioningExpansion = false
+                if !self.isExpanded {
+                    self.updateVisibleCandidateCount()
+                }
+                completion?()
+            }
+        )
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard !isTransitioningExpansion, !isAdjustingLayout else { return }
+        updateVisibleCandidateCount()
+        if isExpanded {
+            applyExpandedSpacing()
         }
     }
 
-    private func makeButton(for candidate: InputCandidate) -> UIButton {
+    private func updateVisibleCandidateCount() {
+        stackView.layoutIfNeeded()
+        let visibleWidth = scrollView.bounds.width - Self.contentInset
+        var offset: CGFloat = 0
+        var count = 0
+        for view in stackView.arrangedSubviews {
+            let maxX = offset + view.bounds.width
+            guard maxX <= visibleWidth + 0.5 else { break }
+            count += 1
+            offset = maxX + Self.collapsedSpacing
+        }
+        guard count != visibleCandidateCount else { return }
+        visibleCandidateCount = count
+        onVisibleCandidatesChanged?(count)
+    }
+
+    private func applyExpandedPresentation() {
+        applyExpandedSpacing()
+        setExtrasAccessibilityHidden(true)
+        stackView.layoutIfNeeded()
+        layoutIfNeeded()
+    }
+
+    private func applyExpandedSpacing() {
+        let spacing = computedExpandedSpacing()
+        guard stackView.spacing != spacing else { return }
+        stackView.spacing = spacing
+    }
+
+    private func computedExpandedSpacing() -> CGFloat {
+        let count = visibleCandidateCount
+        guard count > 0 else { return Self.collapsedSpacing }
+        let contentWidth = stackView.arrangedSubviews.prefix(count)
+            .reduce(CGFloat.zero) { $0 + $1.bounds.width }
+        let availableWidth = scrollView.bounds.width - 2 * Self.contentInset
+        let spacing = (availableWidth - contentWidth) / CGFloat(max(1, count - 1))
+        return max(Self.collapsedSpacing, spacing)
+    }
+
+    private func setExtrasAccessibilityHidden(_ hidden: Bool) {
+        for view in stackView.arrangedSubviews.dropFirst(visibleCandidateCount) {
+            view.accessibilityElementsHidden = hidden
+        }
+    }
+
+    private func makeButton(for candidate: InputCandidate) -> CandidateButton {
+        CandidateButton.make(for: candidate) { [weak self] selected in
+            self?.onSelect?(selected)
+        }
+    }
+}
+
+final class CandidateButton: UIButton {
+    static func make(
+        for candidate: InputCandidate,
+        contentInsets: UIEdgeInsets = UIEdgeInsets(top: 2, left: 10, bottom: 2, right: 10),
+        adjustsTitleToFit: Bool = false,
+        onSelect: @escaping (InputCandidate) -> Void
+    ) -> CandidateButton {
         let button = CandidateButton(type: .custom)
         button.configuration = nil
         button.setTitle(candidate.text, for: .normal)
         button.setTitleColor(.label, for: .normal)
-        button.contentEdgeInsets = UIEdgeInsets(top: 2, left: 10, bottom: 2, right: 10)
+        button.contentEdgeInsets = contentInsets
         button.titleLabel?.font = .preferredFont(forTextStyle: .title3)
         button.titleLabel?.adjustsFontForContentSizeCategory = true
+        if adjustsTitleToFit {
+            button.titleLabel?.adjustsFontSizeToFitWidth = true
+            button.titleLabel?.minimumScaleFactor = 0.6
+            button.titleLabel?.lineBreakMode = .byClipping
+        }
         button.accessibilityIdentifier = candidate.id.accessibilityIdentifier
         button.accessibilityLabel = candidate.text
         button.addAction(
-            UIAction { [weak self] _ in
-                guard let self,
-                      let match = self.candidates.first(where: { $0.id == candidate.id })
-                else {
-                    return
-                }
+            UIAction { _ in
                 KeyHaptics.keyDown()
-                self.onSelect?(match)
+                onSelect(candidate)
             },
             for: .touchUpInside
         )
         return button
     }
-}
 
-private final class CandidateButton: UIButton {
     override var isHighlighted: Bool {
         didSet { updateAppearance() }
     }

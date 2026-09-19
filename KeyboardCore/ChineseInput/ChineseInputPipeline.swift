@@ -16,14 +16,15 @@ final class LexiconChineseInputPipeline: ChineseInputPipeline, @unchecked Sendab
     convenience init(
         bundle: Bundle,
         resourceName: String = "flickzhuyin",
-        resourceExtension: String = "sqlite3"
+        resourceExtension: String = "sqlite3",
+        decoder: Decoder = Decoder()
     ) throws {
         let store = try SQLiteLexiconStore(
             bundle: bundle,
             resourceName: resourceName,
             resourceExtension: resourceExtension
         )
-        try self.init(store: store)
+        try self.init(store: store, decoder: decoder)
     }
 
     init(store: any LexiconStore, decoder: Decoder = Decoder()) throws {

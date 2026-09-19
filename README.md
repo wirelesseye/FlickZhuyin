@@ -9,7 +9,8 @@ FlickZhuyin 是一個實驗性的 iOS 自訂注音鍵盤，使用類似日文假
 - 注音九宮格 Flick 輸入
 - 中文與全鍵盤 ABC 模式切換
 - Inline 組字：宿主輸入框即時顯示已選字與未選注音
-- 最多 10 個漢字／注音候選，可點選組字
+- 最多 30 個漢字／注音候選，可點選組字
+- 候選列右側的箭頭按鈕可展開候選網格，一次瀏覽更多候選；展開時按鍵區會暫時隱藏
 - 聲母縮寫候選：`ㄅ`、`ㄅㄅ` 等尚未構成完整音節的聲母輸入也能查得漢字候選
 - 第一至第四聲 Flick 選擇
 - 獨立輕聲鍵
@@ -82,6 +83,7 @@ FlickZhuyin 是一個實驗性的 iOS 自訂注音鍵盤，使用類似日文假
 
 - 輸入注音後，輸入框立即顯示原始注音（例如 `注ㄧㄣˉ`），候選列同步查詢 production 詞典。
 - 候選列在查詢完成前先顯示原始注音 fallback，完成後換成 Decoder 的 Top-K 候選；候選列依文字合併、每組保留分數最低者，raw 注音候選獨立保留。
+- 候選列可水平捲動；右側箭頭按鈕展開後候選列保留為第一列並鎖住捲動：顯示不完全的候選會被漸變加大的間距推出可見區域，完整可見的候選維持原本大小並撐滿第一列，被推出的候選與其他放不下的候選一起以滑入動畫出現在下方列表；列表選項維持原本寬度、自動換行排列，每列數量隨寬度變動，只有單一選項寬於整個列表寬度時才會縮小字體（鍵盤高度與按鍵尺寸不變，按鍵區淡出並由覆蓋在上方的候選列表取代）。選字或候選清單變空時會自動收合；鍵盤的 decoder 上限為 30 個候選，`KeyboardCore` 的預設仍為 10。
 - 點擊候選會把文字加入 composition，並保留產生它的注音；可繼續輸入下一段，不會提前結束組字。
 - 只輸入聲母時（例如 `ㄅ`、`ㄅㄅ`），候選列以詞典回傳的完整讀音提供漢字候選；完整注音候選仍優先於聲母縮寫候選，raw 注音一律保留。
 - 第一版聲母縮寫只接受固定的注音聲母集合，且只比對「每個音節的第一個聲母」；不支援任意音節前綴（例如 `ㄅㄧ` 不會擴張成 `ㄅㄧㄝ`），`ㄧ`、`ㄨ`、`ㄩ`、`ㄦ` 也不視為聲母。連續聲母的查詢數量有上限，不會指數成長。
@@ -133,7 +135,7 @@ Generated/                     編譯產物（SQLite 詞典與 report）
 - `LexiconChineseInputPipeline` 在初始化時建立並長期持有 store、parser、matcher 與 decoder，把 Top-K 結果轉成精簡的 `InputCandidate`；轉換時依文字合併候選、每組保留分數最低者，raw 注音候選不受合併影響，並在必要時補上 raw 注音候選。
 - 排序由可替換的 `DecoderScorer` 負責，目前 `BaselineDecoderScorer` 只使用稀疏的 Rime `sourceWeight`、parser cost 與簡易分詞懲罰，不是完整的語言模型排序。
 
-`FlickZhuyinKeyboard/ChineseInputCoordinator.swift` 負責非同步協調：每次 pending tokens 改變就增加 revision、先發布 raw fallback，背景完成後只在 revision 與 token snapshot 都相符時套用結果；`KeyboardDocumentClient` 與 `DocumentEffectApplier` 隔離 `UITextDocumentProxy`，`CandidateBarView` 提供固定高度的水平候選列。
+`FlickZhuyinKeyboard/ChineseInputCoordinator.swift` 負責非同步協調：每次 pending tokens 改變就增加 revision、先發布 raw fallback，背景完成後只在 revision 與 token snapshot 都相符時套用結果；`KeyboardDocumentClient` 與 `DocumentEffectApplier` 隔離 `UITextDocumentProxy`，`CandidateBarView` 提供固定高度的水平候選列與展開按鈕，`ExpandedCandidateView` 提供展開後的候選列表，選項依原寬度自動換行排列。
 
 pinned Terra 詞典經過碼表最小化，常見詞如「注音」「你好」原本屬於 Rime 的 preset vocabulary，未包含在 `terra_pinyin.dict.yaml` 中。編譯器改以 pinned Rime Essay 補齊這些常用詞：Terra 提供字音、多音字與明確詞條，Essay 提供常用詞與詞頻；沒有 Terra 明確讀音的 Essay 詞條會以各字的 Terra 單字讀音離線自動標音。合併後的 SQLite 以 `(text, base_key, tone_key)` 為唯一鍵，Essay 詞頻經 log1p 正規化為 `source_weight`，因此「注音」「你好」等詞是帶權重的單一詞條，而不是多個無權重單字臨時拼接。schema v3 另為每個 canonical 讀音寫入 `initial_key`（每個音節第一個注音符號，以 U+001F 分隔）並建立 `pronunciation_initial_key` 索引，供聲母縮寫候選等值查詢。無法標音或超過組合上限的詞條會統計在編譯報告中，不會靜默遺失。
 

@@ -73,6 +73,7 @@
 		A10000000000000000000040 /* ChineseInputCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001C /* ChineseInputCoordinator.swift */; };
 		A10000000000000000000041 /* KeyboardDocumentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001E /* KeyboardDocumentClient.swift */; };
 		A10000000000000000000042 /* InlineCompositionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001F /* InlineCompositionTests.swift */; };
+		A10000000000000000000043 /* ExpandedCandidateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000020 /* ExpandedCandidateView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -145,6 +146,7 @@
 		B1000000000000000000001D /* CandidateBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CandidateBarView.swift; sourceTree = "<group>"; };
 		B1000000000000000000001E /* KeyboardDocumentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardDocumentClient.swift; sourceTree = "<group>"; };
 		B1000000000000000000001F /* InlineCompositionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlineCompositionTests.swift; sourceTree = "<group>"; };
+		B10000000000000000000020 /* ExpandedCandidateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpandedCandidateView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -207,6 +209,7 @@
 				B00000000000000000000008 /* Info.plist */,
 				B1000000000000000000001C /* ChineseInputCoordinator.swift */,
 				B1000000000000000000001D /* CandidateBarView.swift */,
+				B10000000000000000000020 /* ExpandedCandidateView.swift */,
 				B1000000000000000000001E /* KeyboardDocumentClient.swift */,
 			);
 			path = FlickZhuyinKeyboard;
@@ -472,6 +475,7 @@
 				A10000000000000000000039 /* ZhuyinComposition.swift in Sources */,
 				A1000000000000000000003A /* ChineseInputCoordinator.swift in Sources */,
 				A1000000000000000000003B /* CandidateBarView.swift in Sources */,
+				A10000000000000000000043 /* ExpandedCandidateView.swift in Sources */,
 				A1000000000000000000003C /* KeyboardDocumentClient.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
