@@ -60,7 +60,7 @@ final class KeyboardEngineTests: XCTestCase {
     }
 
     func testToneFlickExcludesNeutralTone() {
-        XCTAssertEqual(ZhuyinLayout.tones[.center], "一聲")
+        XCTAssertEqual(ZhuyinLayout.tones[.center], "ˉ")
         XCTAssertEqual(ZhuyinLayout.tones[.left], "ˊ")
         XCTAssertEqual(ZhuyinLayout.tones[.up], "ˇ")
         XCTAssertEqual(ZhuyinLayout.tones[.right], "ˋ")

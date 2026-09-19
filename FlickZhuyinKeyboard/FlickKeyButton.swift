@@ -5,6 +5,7 @@ final class FlickKeyButton: KeyboardButton {
         didSet { setTitle(mapping.center, for: .normal) }
     }
     var onSelection: ((FlickDirection) -> Void)?
+    var showsPreview = true
     weak var overlayHost: UIView?
 
     private var startPoint = CGPoint.zero
@@ -61,7 +62,7 @@ final class FlickKeyButton: KeyboardButton {
     }
 
     private func showPreview(selected: FlickDirection) {
-        guard let overlayHost else { return }
+        guard showsPreview, let overlayHost else { return }
         let preview = FlickPreviewView(mapping: mapping)
         let keyFrame = convert(bounds, to: overlayHost)
         let cellWidth = keyFrame.width

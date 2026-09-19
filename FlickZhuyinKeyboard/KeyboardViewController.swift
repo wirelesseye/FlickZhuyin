@@ -114,10 +114,6 @@ final class KeyboardViewController: UIInputViewController {
                 row.addArrangedSubview(button)
             }
             switch rowIndex {
-            case 0:
-                let button = makeButton(for: .tone(.neutral))
-                row.addArrangedSubview(button)
-                neutralToneButton = button
             case 1:
                 row.addArrangedSubview(makeButton(for: .delete))
             case 2:
@@ -130,7 +126,9 @@ final class KeyboardViewController: UIInputViewController {
 
         let spaceRow = makeRow()
         spaceRow.addArrangedSubview(makeGridSpacer())
-        spaceRow.addArrangedSubview(makeGridSpacer())
+        let neutralToneButton = makeButton(for: .tone(.neutral))
+        spaceRow.addArrangedSubview(neutralToneButton)
+        self.neutralToneButton = neutralToneButton
         spaceRow.addArrangedSubview(makeToneControl())
         spaceRow.addArrangedSubview(makeGridSpacer())
         spaceRow.addArrangedSubview(makeGridSpacer())
@@ -298,7 +296,15 @@ final class KeyboardViewController: UIInputViewController {
             toneButton?.mapping = hasPending
                 ? ZhuyinLayout.tones
                 : FlickKeyMapping(["space"])
-            toneButton?.setTitle(hasPending ? "調" : "space", for: .normal)
+            toneButton?.showsPreview = hasPending
+            if hasPending {
+                toneButton?.setImage(nil, for: .normal)
+                toneButton?.setTitle("調", for: .normal)
+            } else {
+                toneButton?.setTitle(nil, for: .normal)
+                toneButton?.setImage(keyIcon(named: "space"), for: .normal)
+                toneButton?.tintColor = .label
+            }
         }
 
         for (key, button) in keyButtons {
@@ -318,8 +324,8 @@ final class KeyboardViewController: UIInputViewController {
                 button.setImage(keyIcon(named: "delete.left"), for: .normal)
                 button.tintColor = .label
             case .space:
-                button.setTitle("space", for: .normal)
-                button.titleLabel?.font = .systemFont(ofSize: 15)
+                button.setTitle(nil, for: .normal)
+                button.setImage(nil, for: .normal)
             case .return:
                 button.setTitle(nil, for: .normal)
                 button.setImage(keyIcon(named: "arrow.turn.down.left"), for: .normal)

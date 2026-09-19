@@ -58,7 +58,12 @@ enum ZhuyinLayout {
         FlickKeyMapping(["ㄢ", "ㄣ", "ㄤ", "ㄥ"])
     ]
 
-    static let tones = FlickKeyMapping(["一聲", "ˊ", "ˇ", "ˋ"])
+    static let tones = FlickKeyMapping([
+        MandarinTone.first.symbol,
+        MandarinTone.second.symbol,
+        MandarinTone.third.symbol,
+        MandarinTone.fourth.symbol
+    ])
 
     static func tone(for direction: FlickDirection) -> MandarinTone? {
         switch direction {
