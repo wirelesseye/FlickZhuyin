@@ -67,6 +67,8 @@ enum ZhuyinLayout {
 
     static let punctuation = FlickKeyMapping(["，", "。", "？", "！"])
 
+    static let secondaryPunctuation = FlickKeyMapping(["…", "「", "：", "」"])
+
     static func tone(for direction: FlickDirection) -> MandarinTone? {
         switch direction {
         case .center: .first

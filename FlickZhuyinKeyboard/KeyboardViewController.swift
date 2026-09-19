@@ -10,7 +10,7 @@ final class KeyboardViewController: UIInputViewController {
     private weak var expandedCandidatesView: ExpandedCandidateView?
     private weak var keyGrid: UIStackView?
     private weak var toneButton: FlickKeyButton?
-    private weak var neutralToneButton: KeyboardButton?
+    private weak var neutralToneButton: FlickKeyButton?
     private var heightConstraint: NSLayoutConstraint?
     private var isCandidateListExpanded = false
     private var documentEffectDepth = 0
@@ -143,7 +143,7 @@ final class KeyboardViewController: UIInputViewController {
 
         let spaceRow = makeRow()
         spaceRow.addArrangedSubview(makeGridSpacer())
-        let neutralToneButton = makeButton(for: .tone(.neutral))
+        let neutralToneButton = makeSecondaryPunctuationControl()
         spaceRow.addArrangedSubview(neutralToneButton)
         self.neutralToneButton = neutralToneButton
         spaceRow.addArrangedSubview(makeToneControl())
@@ -199,6 +199,29 @@ final class KeyboardViewController: UIInputViewController {
             guard let symbol = mapping[direction] else { return }
             self?.insertPunctuation(symbol)
         }
+        applyPunctuationFace(button, symbols: symbols)
+        button.accessibilityLabel = symbols
+        return button
+    }
+
+    private func makeSecondaryPunctuationControl() -> FlickKeyButton {
+        let mapping = ZhuyinLayout.secondaryPunctuation
+        let button = makeFlickButton(mapping: mapping) { [weak self] direction in
+            guard let self else { return }
+            if self.engine.hasActiveTokens {
+                guard direction == .center else { return }
+                self.handle(.tone(.neutral))
+            } else {
+                guard let symbol = mapping[direction] else { return }
+                self.insertPunctuation(symbol)
+            }
+        }
+        applyPunctuationFace(button, symbols: mappingSymbols(mapping))
+        button.accessibilityLabel = mappingSymbols(mapping)
+        return button
+    }
+
+    private func applyPunctuationFace(_ button: FlickKeyButton, symbols: String) {
         button.setAttributedTitle(
             NSAttributedString(
                 string: symbols,
@@ -212,8 +235,6 @@ final class KeyboardViewController: UIInputViewController {
         )
         button.titleLabel?.adjustsFontSizeToFitWidth = true
         button.titleLabel?.minimumScaleFactor = 0.7
-        button.accessibilityLabel = symbols
-        return button
     }
 
     private func mappingSymbols(_ mapping: FlickKeyMapping) -> String {
@@ -401,9 +422,30 @@ final class KeyboardViewController: UIInputViewController {
         if engine.mode == .zhuyin {
             refreshCandidates()
             let hasPending = engine.hasActiveTokens
-            neutralToneButton?.alpha = hasPending ? 1 : 0
-            neutralToneButton?.isUserInteractionEnabled = hasPending
-            neutralToneButton?.accessibilityElementsHidden = !hasPending
+            if hasPending {
+                neutralToneButton?.mapping = FlickKeyMapping([MandarinTone.neutral.symbol])
+                neutralToneButton?.showsPreview = false
+                neutralToneButton?.setAttributedTitle(
+                    ToneSymbolStyle.attributedText(
+                        for: MandarinTone.neutral.symbol,
+                        fontSize: ToneSymbolStyle.keyFontSize
+                    ),
+                    for: .normal
+                )
+                neutralToneButton?.accessibilityLabel = "輕聲"
+            } else {
+                neutralToneButton?.mapping = ZhuyinLayout.secondaryPunctuation
+                neutralToneButton?.showsPreview = true
+                if let neutralToneButton {
+                    applyPunctuationFace(
+                        neutralToneButton,
+                        symbols: mappingSymbols(ZhuyinLayout.secondaryPunctuation)
+                    )
+                }
+                neutralToneButton?.accessibilityLabel = mappingSymbols(
+                    ZhuyinLayout.secondaryPunctuation
+                )
+            }
             toneButton?.mapping = hasPending
                 ? ZhuyinLayout.tones
                 : FlickKeyMapping(["space"])
