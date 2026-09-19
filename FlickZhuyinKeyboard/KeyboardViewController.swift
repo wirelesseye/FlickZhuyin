@@ -156,7 +156,7 @@ final class KeyboardViewController: UIInputViewController {
             }
         }
         button.titleLabel?.font = .systemFont(ofSize: 15)
-        button.normalColor = .tertiarySystemFill
+        button.normalColor = KeyboardButton.standardKeyColor
         button.accessibilityLabel = "空白或音調"
         toneButton = button
         return button
@@ -200,7 +200,7 @@ final class KeyboardViewController: UIInputViewController {
         let button = FlickKeyButton(mapping: mapping)
         button.overlayHost = view
         button.onSelection = onSelection
-        button.normalColor = .systemBackground.withAlphaComponent(0.62)
+        button.normalColor = KeyboardButton.standardKeyColor
         button.accessibilityLabel = mapping.center
         return button
     }
@@ -208,9 +208,7 @@ final class KeyboardViewController: UIInputViewController {
     private func makeButton(for key: KeyboardKey) -> KeyboardButton {
         let button = KeyboardButton(type: .system)
         button.accessibilityLabel = accessibilityLabel(for: key)
-        button.normalColor = isLetter(key)
-            ? .systemBackground.withAlphaComponent(0.62)
-            : .tertiarySystemFill
+        button.normalColor = KeyboardButton.standardKeyColor
 
         if key == .nextKeyboard {
             button.setImage(UIImage(systemName: "globe"), for: .normal)
@@ -355,11 +353,6 @@ final class KeyboardViewController: UIInputViewController {
         case .zhuyin: heightConstraint?.constant = compact ? 220 : 260
         case .abc: heightConstraint?.constant = compact ? 190 : 230
         }
-    }
-
-    private func isLetter(_ key: KeyboardKey) -> Bool {
-        if case .letter = key { return true }
-        return false
     }
 
     private func keyIcon(named name: String) -> UIImage? {

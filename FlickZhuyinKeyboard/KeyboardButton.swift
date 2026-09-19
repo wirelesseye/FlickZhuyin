@@ -1,7 +1,13 @@
 import UIKit
 
 class KeyboardButton: UIButton {
-    var normalColor: UIColor = .secondarySystemBackground {
+    static let standardKeyColor = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(white: 0.28, alpha: 1)
+            : UIColor(white: 1, alpha: 1)
+    }
+
+    var normalColor: UIColor = KeyboardButton.standardKeyColor {
         didSet { updateAppearance() }
     }
 
@@ -16,8 +22,6 @@ class KeyboardButton: UIButton {
         super.init(frame: frame)
         layer.cornerRadius = 11
         layer.cornerCurve = .continuous
-        layer.borderWidth = 0.5
-        layer.borderColor = UIColor.white.withAlphaComponent(0.38).cgColor
         clipsToBounds = false
 
         materialView.isUserInteractionEnabled = false
@@ -55,13 +59,12 @@ class KeyboardButton: UIButton {
 
     private func updateAppearance() {
         backgroundColor = .clear
-        tintView.backgroundColor = normalColor.withAlphaComponent(isHighlighted ? 0.32 : 0.48)
+        tintView.backgroundColor = isHighlighted
+            ? normalColor.withAlphaComponent(0.78)
+            : normalColor
         materialView.effect = UIBlurEffect(
             style: isHighlighted ? .systemThinMaterial : .systemUltraThinMaterial
         )
-        layer.borderColor = UIColor.white.withAlphaComponent(
-            traitCollection.userInterfaceStyle == .dark ? 0.16 : 0.46
-        ).cgColor
         transform = isHighlighted
             ? CGAffineTransform(scaleX: 0.97, y: 0.97)
             : .identity
