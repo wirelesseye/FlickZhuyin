@@ -6,6 +6,8 @@ enum KeyboardKey: Equatable, Sendable {
     case tone(MandarinTone)
     case shift
     case delete
+    case cursorLeft
+    case cursorRight
     case space
     case `return`
     case nextKeyboard
@@ -13,10 +15,11 @@ enum KeyboardKey: Equatable, Sendable {
 }
 
 enum DocumentEffect: Equatable, Sendable {
-    case setMarkedText(String)
+    case setMarkedText(String, caret: Int)
     case unmarkText
     case insertText(String)
     case deleteBackward
+    case moveCursor(by: Int)
     case showInputModeList
 }
 

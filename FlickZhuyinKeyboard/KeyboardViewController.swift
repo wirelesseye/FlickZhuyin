@@ -106,7 +106,12 @@ final class KeyboardViewController: UIInputViewController {
         grid.distribution = .fillEqually
         for rowIndex in 0..<3 {
             let row = makeRow()
-            row.addArrangedSubview(rowIndex == 2 ? makeButton(for: .modeSwitch) : makeGridSpacer())
+            let leadingColumn: UIView = switch rowIndex {
+            case 1: makeButton(for: .cursorLeft)
+            case 2: makeButton(for: .modeSwitch)
+            default: makeGridSpacer()
+            }
+            row.addArrangedSubview(leadingColumn)
             for mapping in ZhuyinLayout.groups[(rowIndex * 3)..<(rowIndex * 3 + 3)] {
                 let button = makeFlickButton(mapping: mapping) { [weak self] direction in
                     guard let symbol = mapping[direction], let character = symbol.first else { return }
@@ -114,14 +119,12 @@ final class KeyboardViewController: UIInputViewController {
                 }
                 row.addArrangedSubview(button)
             }
-            switch rowIndex {
-            case 1:
-                row.addArrangedSubview(makeButton(for: .delete))
-            case 2:
-                row.addArrangedSubview(makeButton(for: .return))
-            default:
-                row.addArrangedSubview(makeGridSpacer())
+            let trailingColumn: UIView = switch rowIndex {
+            case 0: makeButton(for: .delete)
+            case 1: makeButton(for: .cursorRight)
+            default: makeButton(for: .return)
             }
+            row.addArrangedSubview(trailingColumn)
             grid.addArrangedSubview(row)
         }
 
@@ -148,7 +151,7 @@ final class KeyboardViewController: UIInputViewController {
     private func makeToneControl() -> FlickKeyButton {
         let button = makeFlickButton(mapping: FlickKeyMapping(["space"])) { [weak self] direction in
             guard let self else { return }
-            if self.engine.hasPendingTokens {
+            if self.engine.hasActiveTokens {
                 guard let tone = ZhuyinLayout.tone(for: direction) else { return }
                 self.handle(.tone(tone))
             } else {
@@ -324,7 +327,7 @@ final class KeyboardViewController: UIInputViewController {
     private func refreshUI() {
         if engine.mode == .zhuyin {
             refreshCandidates()
-            let hasPending = engine.hasPendingTokens
+            let hasPending = engine.hasActiveTokens
             neutralToneButton?.alpha = hasPending ? 1 : 0
             neutralToneButton?.isUserInteractionEnabled = hasPending
             neutralToneButton?.accessibilityElementsHidden = !hasPending
@@ -357,6 +360,10 @@ final class KeyboardViewController: UIInputViewController {
             case .delete:
                 button.setTitle(nil, for: .normal)
                 button.setImage(keyIcon(named: "delete.left"), for: .normal)
+                button.tintColor = .label
+            case .cursorLeft, .cursorRight:
+                button.setTitle(nil, for: .normal)
+                button.setImage(keyIcon(named: key == .cursorLeft ? "arrow.left" : "arrow.right"), for: .normal)
                 button.tintColor = .label
             case .space:
                 button.setTitle(nil, for: .normal)
@@ -409,6 +416,8 @@ final class KeyboardViewController: UIInputViewController {
         case let .tone(tone): tone == .first ? "第一聲" : tone.symbol
         case .shift: "Shift"
         case .delete: "Delete"
+        case .cursorLeft: "向左移動"
+        case .cursorRight: "向右移動"
         case .space: "Space"
         case .return: "Return"
         case .nextKeyboard: "Next keyboard"

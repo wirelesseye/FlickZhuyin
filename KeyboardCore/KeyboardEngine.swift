@@ -14,12 +14,12 @@ struct KeyboardEngine: Sendable {
         composition.markedText
     }
 
-    var pendingText: String {
-        composition.pendingText
+    var activeTokenText: String {
+        composition.activeTokenText
     }
 
-    var hasPendingTokens: Bool {
-        !composition.pendingTokens.isEmpty
+    var hasActiveTokens: Bool {
+        !composition.activeTokens.isEmpty
     }
 
     var hasMarkedText: Bool {
@@ -43,46 +43,31 @@ struct KeyboardEngine: Sendable {
             return KeyboardUpdate(documentEffects: [.insertText(text)])
         case let .zhuyin(character):
             guard mode == .zhuyin else { return .none }
-            composition.pendingTokens.append(.symbol(character))
-            return pendingUpdate()
+            composition.insertSymbol(character)
+            return activeRunUpdate()
         case let .tone(tone):
-            guard mode == .zhuyin, !composition.pendingTokens.isEmpty else { return .none }
-            if case .tone = composition.pendingTokens.last {
-                composition.pendingTokens[composition.pendingTokens.count - 1] = .tone(tone)
-            } else {
-                composition.pendingTokens.append(.tone(tone))
-            }
-            return pendingUpdate()
+            guard mode == .zhuyin, composition.applyTone(tone) else { return .none }
+            return activeRunUpdate()
         case .shift:
             guard mode == .abc else { return .none }
             updateShift(at: timestamp)
             return .none
         case .delete:
-            guard mode == .zhuyin else {
+            guard mode == .zhuyin, !composition.isEmpty else {
                 return KeyboardUpdate(documentEffects: [.deleteBackward])
             }
-            if !composition.pendingTokens.isEmpty {
-                composition.pendingTokens.removeLast()
-                if composition.pendingTokens.isEmpty {
-                    if composition.selectedChunks.isEmpty {
-                        return KeyboardUpdate(
-                            documentEffects: [.setMarkedText(""), .unmarkText],
-                            invalidatesCandidates: true
-                        )
-                    }
-                    return KeyboardUpdate(
-                        documentEffects: [.setMarkedText(composition.markedText)],
-                        invalidatesCandidates: true
-                    )
-                }
-                return pendingUpdate()
+            guard composition.deletePieceBeforeCaret() else { return .none }
+            if composition.isEmpty {
+                return KeyboardUpdate(
+                    documentEffects: [.setMarkedText("", caret: 0), .unmarkText],
+                    invalidatesCandidates: true
+                )
             }
-            if !composition.selectedChunks.isEmpty {
-                let chunk = composition.selectedChunks.removeLast()
-                composition.pendingTokens = chunk.sourceTokens
-                return pendingUpdate()
-            }
-            return KeyboardUpdate(documentEffects: [.deleteBackward])
+            return activeRunUpdate()
+        case .cursorLeft:
+            return cursorUpdate(by: -1)
+        case .cursorRight:
+            return cursorUpdate(by: 1)
         case .space:
             guard mode == .zhuyin, !composition.isEmpty else {
                 return KeyboardUpdate(documentEffects: [.insertText(" ")])
@@ -125,17 +110,17 @@ struct KeyboardEngine: Sendable {
     }
 
     mutating func selectCandidate(_ candidate: InputCandidate) -> KeyboardUpdate {
-        guard mode == .zhuyin, !composition.pendingTokens.isEmpty else { return .none }
-        composition.selectedChunks.append(
-            SelectedChunk(
+        let tokens = composition.activeTokens
+        guard mode == .zhuyin, !tokens.isEmpty else { return .none }
+        composition.replaceActiveTokens(
+            with: SelectedChunk(
                 text: candidate.text,
-                sourceTokens: composition.pendingTokens,
+                sourceTokens: tokens,
                 pronunciation: candidate.pronunciation
             )
         )
-        composition.pendingTokens.removeAll(keepingCapacity: true)
         return KeyboardUpdate(
-            documentEffects: [.setMarkedText(composition.markedText)],
+            documentEffects: [.setMarkedText(composition.markedText, caret: composition.caretOffset)],
             invalidatesCandidates: true
         )
     }
@@ -146,11 +131,26 @@ struct KeyboardEngine: Sendable {
         return KeyboardUpdate(invalidatesCandidates: true)
     }
 
-    private func pendingUpdate() -> KeyboardUpdate {
-        KeyboardUpdate(
-            documentEffects: [.setMarkedText(composition.markedText)],
-            candidateRequest: CandidateRequest(tokens: composition.pendingTokens)
+    private func activeRunUpdate() -> KeyboardUpdate {
+        let effects: [DocumentEffect] = [
+            .setMarkedText(composition.markedText, caret: composition.caretOffset)
+        ]
+        let tokens = composition.activeTokens
+        guard !tokens.isEmpty else {
+            return KeyboardUpdate(documentEffects: effects, invalidatesCandidates: true)
+        }
+        return KeyboardUpdate(
+            documentEffects: effects,
+            candidateRequest: CandidateRequest(tokens: tokens)
         )
+    }
+
+    private mutating func cursorUpdate(by offset: Int) -> KeyboardUpdate {
+        guard !composition.isEmpty else {
+            return KeyboardUpdate(documentEffects: [.moveCursor(by: offset)])
+        }
+        guard composition.moveCaret(by: offset) else { return .none }
+        return activeRunUpdate()
     }
 
     private mutating func updateShift(at timestamp: TimeInterval) {

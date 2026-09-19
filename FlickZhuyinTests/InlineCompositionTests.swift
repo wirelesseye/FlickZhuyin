@@ -25,13 +25,16 @@ final class ZhuyinCompositionTests: XCTestCase {
             sourceTokens: [.symbol("ㄓ"), .symbol("ㄨ"), .tone(.fourth)],
             pronunciation: [zhuyinConstraint]
         )
-        var composition = ZhuyinComposition(selectedChunks: [chunk])
+        var composition = ZhuyinComposition(pieces: [.selected(chunk)], caretIndex: 1)
         XCTAssertEqual(composition.markedText, "注")
-        XCTAssertEqual(composition.pendingText, "")
+        XCTAssertEqual(composition.activeTokenText, "")
         XCTAssertFalse(composition.isEmpty)
 
-        composition.pendingTokens = [.symbol("ㄧ"), .symbol("ㄣ"), .tone(.first)]
-        XCTAssertEqual(composition.pendingText, "ㄧㄣˉ")
+        composition.pieces.append(contentsOf: [
+            .token(.symbol("ㄧ")), .token(.symbol("ㄣ")), .token(.tone(.first))
+        ])
+        composition.caretIndex = composition.pieces.count
+        XCTAssertEqual(composition.activeTokenText, "ㄧㄣˉ")
         XCTAssertEqual(composition.markedText, "注ㄧㄣˉ")
     }
 
@@ -39,6 +42,19 @@ final class ZhuyinCompositionTests: XCTestCase {
         let composition = ZhuyinComposition()
         XCTAssertTrue(composition.isEmpty)
         XCTAssertEqual(composition.markedText, "")
+    }
+
+    func testCaretOffsetCountsUTF16Units() {
+        let chunk = SelectedChunk(
+            text: "𠀀",
+            sourceTokens: [.symbol("ㄓ")],
+            pronunciation: [zhuyinConstraint]
+        )
+        let composition = ZhuyinComposition(
+            pieces: [.selected(chunk), .token(.symbol("ㄓ"))],
+            caretIndex: 2
+        )
+        XCTAssertEqual(composition.caretOffset, 3)
     }
 
     func testTokenDisplayText() {
@@ -60,12 +76,12 @@ final class KeyboardCompositionTests: XCTestCase {
         var engine = KeyboardEngine()
         _ = engine.update(for: .zhuyin("ㄓ"))
         let update = engine.selectCandidate(makeCandidate("注"))
-        XCTAssertEqual(update.documentEffects, [.setMarkedText("注")])
+        XCTAssertEqual(update.documentEffects, [.setMarkedText("注", caret: 1)])
         XCTAssertTrue(update.invalidatesCandidates)
         XCTAssertNil(update.candidateRequest)
         XCTAssertEqual(engine.composition.selectedChunks.map(\.text), ["注"])
-        XCTAssertTrue(engine.composition.pendingTokens.isEmpty)
-        XCTAssertFalse(engine.hasPendingTokens)
+        XCTAssertTrue(engine.composition.activeTokens.isEmpty)
+        XCTAssertFalse(engine.hasActiveTokens)
     }
 
     func testSelectedChunkKeepsSourceTokens() {
@@ -88,21 +104,21 @@ final class KeyboardCompositionTests: XCTestCase {
         _ = engine.selectCandidate(makeCandidate("音", base: "ㄧㄣ", tone: .first))
         XCTAssertEqual(engine.markedText, "注音")
         XCTAssertEqual(engine.composition.selectedChunks.count, 2)
-        XCTAssertTrue(engine.composition.pendingTokens.isEmpty)
+        XCTAssertTrue(engine.composition.activeTokens.isEmpty)
     }
 
     func testDeleteUndoesSelectedChunkAndRestoresTokens() {
         var engine = KeyboardEngine()
         selectZhuyin(&engine)
         let undo = engine.update(for: .delete)
-        XCTAssertEqual(undo.documentEffects, [.setMarkedText("ㄓㄨˋ")])
+        XCTAssertEqual(undo.documentEffects, [.setMarkedText("ㄓㄨˋ", caret: 3)])
         XCTAssertEqual(
             undo.candidateRequest?.tokens,
             [.symbol("ㄓ"), .symbol("ㄨ"), .tone(.fourth)]
         )
         XCTAssertFalse(undo.invalidatesCandidates)
         XCTAssertTrue(engine.composition.selectedChunks.isEmpty)
-        XCTAssertEqual(engine.pendingText, "ㄓㄨˋ")
+        XCTAssertEqual(engine.activeTokenText, "ㄓㄨˋ")
     }
 
     func testDeletingLastPendingTokenEndsMarkedText() {
@@ -111,7 +127,7 @@ final class KeyboardCompositionTests: XCTestCase {
 
         let update = engine.update(for: .delete)
 
-        XCTAssertEqual(update.documentEffects, [.setMarkedText(""), .unmarkText])
+        XCTAssertEqual(update.documentEffects, [.setMarkedText("", caret: 0), .unmarkText])
         XCTAssertTrue(update.invalidatesCandidates)
         XCTAssertNil(update.candidateRequest)
         XCTAssertTrue(engine.composition.isEmpty)
@@ -124,7 +140,7 @@ final class KeyboardCompositionTests: XCTestCase {
 
         let update = engine.update(for: .delete)
 
-        XCTAssertEqual(update.documentEffects, [.setMarkedText("注")])
+        XCTAssertEqual(update.documentEffects, [.setMarkedText("注", caret: 1)])
         XCTAssertTrue(update.invalidatesCandidates)
         XCTAssertNil(update.candidateRequest)
         XCTAssertEqual(engine.markedText, "注")
@@ -168,12 +184,51 @@ final class KeyboardCompositionTests: XCTestCase {
     func testToneControlVisibilityDependsOnlyOnPendingTokens() {
         var engine = KeyboardEngine()
         _ = engine.update(for: .zhuyin("ㄓ"))
-        XCTAssertTrue(engine.hasPendingTokens)
+        XCTAssertTrue(engine.hasActiveTokens)
         _ = engine.selectCandidate(makeCandidate("注"))
-        XCTAssertFalse(engine.hasPendingTokens)
+        XCTAssertFalse(engine.hasActiveTokens)
         XCTAssertFalse(engine.composition.isEmpty)
         _ = engine.update(for: .delete)
-        XCTAssertTrue(engine.hasPendingTokens)
+        XCTAssertTrue(engine.hasActiveTokens)
+    }
+
+    func testCursorMovesWithinMarkedTextWithoutCommitting() {
+        var engine = KeyboardEngine()
+        _ = engine.update(for: .zhuyin("ㄓ"))
+        _ = engine.update(for: .zhuyin("ㄨ"))
+        let update = engine.update(for: .cursorLeft)
+        XCTAssertEqual(update.documentEffects, [.setMarkedText("ㄓㄨ", caret: 1)])
+        XCTAssertEqual(update.candidateRequest?.tokens, [.symbol("ㄓ"), .symbol("ㄨ")])
+        XCTAssertEqual(engine.markedText, "ㄓㄨ")
+    }
+
+    func testCursorStopsAtMarkedTextBoundaries() {
+        var engine = KeyboardEngine()
+        _ = engine.update(for: .zhuyin("ㄓ"))
+        _ = engine.update(for: .cursorLeft)
+        XCTAssertEqual(engine.update(for: .cursorLeft), .none)
+        _ = engine.update(for: .cursorRight)
+        XCTAssertEqual(engine.update(for: .cursorRight), .none)
+        XCTAssertEqual(engine.markedText, "ㄓ")
+    }
+
+    func testZhuyinInputInsertsAtCaret() {
+        var engine = KeyboardEngine()
+        _ = engine.update(for: .zhuyin("ㄓ"))
+        _ = engine.update(for: .zhuyin("ㄨ"))
+        _ = engine.update(for: .cursorLeft)
+        _ = engine.update(for: .zhuyin("ㄅ"))
+        XCTAssertEqual(engine.markedText, "ㄓㄅㄨ")
+    }
+
+    func testDeleteRemovesPieceBeforeCaret() {
+        var engine = KeyboardEngine()
+        _ = engine.update(for: .zhuyin("ㄓ"))
+        _ = engine.update(for: .zhuyin("ㄨ"))
+        _ = engine.update(for: .cursorLeft)
+        let update = engine.update(for: .delete)
+        XCTAssertEqual(update.documentEffects, [.setMarkedText("ㄨ", caret: 0)])
+        XCTAssertEqual(engine.markedText, "ㄨ")
     }
 }
 
@@ -412,18 +467,18 @@ private final class CreationFlag {
 
 @MainActor
 final class DocumentEffectApplierTests: XCTestCase {
-    func testMarkedTextSelectionUsesUTF16Length() {
+    func testMarkedTextForwardsSelectedRange() {
         let client = FakeKeyboardDocumentClient()
         let applier = DocumentEffectApplier(client: client)
-        applier.apply([.setMarkedText("𠀀ㄓ")])
+        applier.apply([.setMarkedText("𠀀ㄓ", caret: 3)])
         XCTAssertEqual(client.events, [.setMarkedText("𠀀ㄓ", NSRange(location: 3, length: 0))])
     }
 
     func testMarkedTextUpdatesReplaceInsteadOfInserting() {
         let client = FakeKeyboardDocumentClient()
         let applier = DocumentEffectApplier(client: client)
-        applier.apply([.setMarkedText("ㄓ")])
-        applier.apply([.setMarkedText("ㄓㄨ")])
+        applier.apply([.setMarkedText("ㄓ", caret: 1)])
+        applier.apply([.setMarkedText("ㄓㄨ", caret: 2)])
         XCTAssertEqual(
             client.events,
             [
@@ -464,6 +519,13 @@ final class DocumentEffectApplierTests: XCTestCase {
         applier.apply([.showInputModeList])
         XCTAssertTrue(client.events.isEmpty)
     }
+
+    func testMoveCursorIsForwarded() {
+        let client = FakeKeyboardDocumentClient()
+        let applier = DocumentEffectApplier(client: client)
+        applier.apply([.moveCursor(by: -1), .moveCursor(by: 1)])
+        XCTAssertEqual(client.events, [.moveCursor(-1), .moveCursor(1)])
+    }
 }
 
 @MainActor
@@ -473,6 +535,7 @@ private final class FakeKeyboardDocumentClient: KeyboardDocumentClient {
         case unmarkText
         case insertText(String)
         case deleteBackward
+        case moveCursor(Int)
     }
 
     private(set) var events: [Event] = []
@@ -491,5 +554,9 @@ private final class FakeKeyboardDocumentClient: KeyboardDocumentClient {
 
     func deleteBackward() {
         events.append(.deleteBackward)
+    }
+
+    func moveCursor(by offset: Int) {
+        events.append(.moveCursor(offset))
     }
 }

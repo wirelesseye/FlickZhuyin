@@ -7,6 +7,7 @@ protocol KeyboardDocumentClient: AnyObject {
     func unmarkText()
     func insertText(_ text: String)
     func deleteBackward()
+    func moveCursor(by offset: Int)
 }
 
 @MainActor
@@ -20,15 +21,16 @@ final class DocumentEffectApplier {
     func apply(_ effects: [DocumentEffect]) {
         for effect in effects {
             switch effect {
-            case let .setMarkedText(text):
-                let length = (text as NSString).length
-                client.setMarkedText(text, selectedRange: NSRange(location: length, length: 0))
+            case let .setMarkedText(text, caret):
+                client.setMarkedText(text, selectedRange: NSRange(location: caret, length: 0))
             case .unmarkText:
                 client.unmarkText()
             case let .insertText(text):
                 client.insertText(text)
             case .deleteBackward:
                 client.deleteBackward()
+            case let .moveCursor(offset):
+                client.moveCursor(by: offset)
             case .showInputModeList:
                 break
             }
@@ -58,5 +60,9 @@ final class TextDocumentProxyClient: KeyboardDocumentClient {
 
     func deleteBackward() {
         proxy.deleteBackward()
+    }
+
+    func moveCursor(by offset: Int) {
+        proxy.adjustTextPosition(byCharacterOffset: offset)
     }
 }
