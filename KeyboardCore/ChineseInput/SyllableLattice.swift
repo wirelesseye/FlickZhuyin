@@ -11,6 +11,14 @@ struct SyllableEdge: Hashable, Sendable {
     let constraint: SyllableConstraint
     let completeness: SyllableCompleteness
     let parserCost: Double
+
+    var isInitialAbbreviation: Bool {
+        completeness == .incomplete
+            && SyllableParser.supportsInitialAbbreviation(
+                base: constraint.base,
+                tone: constraint.tone
+            )
+    }
 }
 
 struct SyllableLattice: Sendable {

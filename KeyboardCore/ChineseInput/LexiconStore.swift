@@ -18,6 +18,7 @@ struct LexiconMatch: Equatable, Sendable {
 
 protocol LexiconStore: Sendable {
     func exactMatches(for syllables: [SyllableConstraint]) throws -> [LexiconMatch]
+    func initialMatches(for initials: [Character], limit: Int) throws -> [LexiconMatch]
     func syllableInventory() throws -> [String]
 }
 

@@ -140,7 +140,7 @@ class CompilerTestCase(unittest.TestCase):
                     "SELECT base FROM syllable_inventory ORDER BY base"
                 ).fetchall(),
                 "pronunciation": connection.execute(
-                    "SELECT id, text, syllable_count, base_key, tone_key, source_weight, "
+                    "SELECT id, text, syllable_count, base_key, tone_key, initial_key, source_weight, "
                     "source_kind, terra_source_line, terra_source_lines, essay_source_line, raw_frequency "
                     "FROM pronunciation ORDER BY id"
                 ).fetchall(),
@@ -461,10 +461,59 @@ class CompilationTests(CompilerTestCase):
 
     def test_base_and_tone_keys(self):
         output, _ = self.build("中文\tzhong1 wen2\n")
-        row = self.query(output, "SELECT base_key, tone_key, syllable_count FROM pronunciation")[0]
+        row = self.query(output, "SELECT base_key, tone_key, initial_key, syllable_count FROM pronunciation")[0]
         self.assertEqual(row[0], "ㄓㄨㄥ\u001fㄨㄣ")
         self.assertEqual(row[1], "12")
-        self.assertEqual(row[2], 2)
+        self.assertEqual(row[2], "\u001f".join(["ㄓ", "ㄨ"]))
+        self.assertEqual(row[3], 2)
+
+    def test_initial_keys_for_single_and_multi_syllable_readings(self):
+        output, _ = self.build(
+            "爸爸\tba4 ba5\n注音\tzhu4 yin1\n中\tzhong1\n",
+        )
+        rows = self.query(output, "SELECT text, initial_key, syllable_count FROM pronunciation ORDER BY text")
+        self.assertEqual(
+            rows,
+            [
+                ("中", "ㄓ", 1),
+                ("注音", "\u001f".join(["ㄓ", "ㄧ"]), 2),
+                ("爸爸", "\u001f".join(["ㄅ", "ㄅ"]), 2),
+            ],
+        )
+
+    def test_initial_key_segments_match_syllable_count(self):
+        output, report = self.build(
+            "你好\tni3 hao3\n中國\tzhong1 guo2\n中\tzhong1\n",
+            essay_body="你好\t100\n",
+        )
+        rows = self.query(output, "SELECT initial_key, syllable_count FROM pronunciation")
+        self.assertFalse(rows == [])
+        for initial_key, syllable_count in rows:
+            segments = initial_key.split(SEPARATOR)
+            self.assertEqual(len(segments), syllable_count)
+            self.assertTrue(all(len(segment) == 1 for segment in segments))
+        self.assertEqual(report["initialKeyIntegrity"]["checkedEntries"], len(rows))
+        self.assertEqual(report["initialKeyIntegrity"]["syllableCountMismatches"], 0)
+        self.assertGreater(report["distinctInitialKeys"], 0)
+
+    def test_schema_creates_initial_key_index(self):
+        output, _ = self.build("中文\tzhong1 wen2\n")
+        indexes = dict(
+            self.query(
+                output,
+                "SELECT name, sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'pronunciation'",
+            )
+        )
+        self.assertIn("pronunciation_initial_key", indexes)
+        self.assertIn("initial_key", indexes["pronunciation_initial_key"])
+        plan = self.query(
+            output,
+            "EXPLAIN QUERY PLAN SELECT text, tone_key, source_weight FROM pronunciation "
+            "WHERE initial_key = 'x' AND syllable_count = 2",
+        )
+        detail = " ".join(str(row[-1]) for row in plan).lower()
+        self.assertIn("pronunciation_initial_key", detail)
+        self.assertIn("search", detail)
 
     def test_terra_only_rows_keep_terra_weight(self):
         output, _ = self.build("中\tzhong1\t42%\n")
@@ -486,21 +535,23 @@ class CompilationTests(CompilerTestCase):
     def test_metadata_and_inventory(self):
         output, report = self.build("中\tzhong1\n文\twen2\n", essay_body="中文\t100\n")
         metadata = dict(self.query(output, "SELECT key, value FROM metadata"))
-        self.assertEqual(metadata["schema_version"], "2")
+        self.assertEqual(metadata["schema_version"], "3")
         self.assertEqual(metadata["terra_source_commit"], "0" * 40)
         self.assertEqual(metadata["terra_source_sha256"], report["sources"]["terra"]["sha256"])
         self.assertEqual(metadata["essay_source_commit"], "1" * 40)
         self.assertEqual(metadata["essay_source_sha256"], report["sources"]["essay"]["sha256"])
         self.assertEqual(metadata["entry_count"], str(report["compiledEntries"]))
         self.assertEqual(metadata["dictionary_version"], "1.0")
-        self.assertEqual(metadata["compiler_version"], "2")
+        self.assertEqual(metadata["compiler_version"], "3")
         self.assertEqual(metadata["essay_entry_count"], "1")
         self.assertEqual(metadata["essay_annotated_entry_count"], "1")
         self.assertEqual(metadata["essay_frequency_max"], "100")
         self.assertEqual(metadata["weight_normalization"], "log1p(frequency)/log1p(max_frequency)")
+        self.assertEqual(report["schemaVersion"], 3)
+        self.assertEqual(report["compilerVersion"], "3")
         inventory = [row[0] for row in self.query(output, "SELECT base FROM syllable_inventory ORDER BY base")]
         self.assertEqual(inventory, sorted({"ㄓㄨㄥ", "ㄨㄣ"}))
-        self.assertEqual(self.query(output, "PRAGMA user_version")[0][0], 2)
+        self.assertEqual(self.query(output, "PRAGMA user_version")[0][0], 3)
         self.assertEqual(self.query(output, "PRAGMA page_size")[0][0], 4096)
         self.assertEqual(self.query(output, "PRAGMA integrity_check")[0][0], "ok")
 
@@ -658,7 +709,8 @@ class ProductionDictionaryTests(CompilerTestCase):
         terra_manifest = json.loads(PRODUCTION_TERRA_MANIFEST.read_text(encoding="utf-8"))
         essay_manifest = json.loads(PRODUCTION_ESSAY_MANIFEST.read_text(encoding="utf-8"))
         metadata = dict(self.query(PRODUCTION_DATABASE, "SELECT key, value FROM metadata"))
-        self.assertEqual(metadata["schema_version"], "2")
+        self.assertEqual(metadata["schema_version"], "3")
+        self.assertEqual(metadata["compiler_version"], "3")
         self.assertEqual(metadata["terra_source_repository"], terra_manifest["repository"])
         self.assertEqual(metadata["terra_source_commit"], terra_manifest["commit"])
         self.assertEqual(metadata["terra_source_sha256"], terra_manifest["sha256"])
@@ -673,15 +725,16 @@ class ProductionDictionaryTests(CompilerTestCase):
     def test_representative_words_are_weighted(self):
         zhuyin = self.query(
             PRODUCTION_DATABASE,
-            "SELECT base_key, tone_key, source_weight, source_kind, raw_frequency "
+            "SELECT base_key, tone_key, initial_key, source_weight, source_kind, raw_frequency "
             "FROM pronunciation WHERE text = '注音'",
         )
         self.assertEqual(len(zhuyin), 1)
         self.assertEqual(zhuyin[0][0], SEPARATOR.join(["ㄓㄨ", "ㄧㄣ"]))
         self.assertEqual(zhuyin[0][1], "41")
-        self.assertIsNotNone(zhuyin[0][2])
-        self.assertEqual(zhuyin[0][3], "essay")
-        self.assertIsNotNone(zhuyin[0][4])
+        self.assertEqual(zhuyin[0][2], SEPARATOR.join(["ㄓ", "ㄧ"]))
+        self.assertIsNotNone(zhuyin[0][3])
+        self.assertEqual(zhuyin[0][4], "essay")
+        self.assertIsNotNone(zhuyin[0][5])
         nihao = self.query(
             PRODUCTION_DATABASE,
             "SELECT COUNT(*) FROM pronunciation WHERE text = '你好' AND source_weight IS NOT NULL",
@@ -696,15 +749,19 @@ class ProductionDictionaryTests(CompilerTestCase):
     def test_all_rows_are_well_formed(self):
         rows = self.query(
             PRODUCTION_DATABASE,
-            "SELECT base_key, tone_key, syllable_count FROM pronunciation",
+            "SELECT base_key, tone_key, initial_key, syllable_count FROM pronunciation",
         )
         self.assertFalse(rows == [])
-        for base_key, tone_key, syllable_count in rows:
+        for base_key, tone_key, initial_key, syllable_count in rows:
             bases = base_key.split(SEPARATOR)
             self.assertEqual(len(bases), syllable_count)
             self.assertTrue(all(bases))
             self.assertEqual(len(tone_key), syllable_count)
             self.assertTrue(all(character in "12345" for character in tone_key))
+            initials = initial_key.split(SEPARATOR)
+            self.assertEqual(len(initials), syllable_count)
+            self.assertTrue(all(len(initial) == 1 for initial in initials))
+            self.assertEqual(initials, [base[0] for base in bases])
 
     def test_lookup_uses_index(self):
         plan = self.query(
@@ -715,6 +772,15 @@ class ProductionDictionaryTests(CompilerTestCase):
         detail = " ".join(str(row[-1]) for row in plan).lower()
         self.assertIn("pronunciation_base_key", detail)
         self.assertIn("search", detail)
+
+        initial_plan = self.query(
+            PRODUCTION_DATABASE,
+            "EXPLAIN QUERY PLAN SELECT text, base_key, tone_key, source_weight FROM pronunciation "
+            "WHERE initial_key = 'x' AND syllable_count = 2 ORDER BY source_weight DESC, id LIMIT 64",
+        )
+        initial_detail = " ".join(str(row[-1]) for row in initial_plan).lower()
+        self.assertIn("pronunciation_initial_key", initial_detail)
+        self.assertIn("search", initial_detail)
 
 
 if __name__ == "__main__":

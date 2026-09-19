@@ -2,7 +2,7 @@
   "repository": "https://example.invalid/flickzhuyin-tests",
   "commit": "0000000000000000000000000000000000000000",
   "dictionaryPath": "zhuyin_tests.dict.yaml",
-  "sha256": "d3a8607d40c6c94572eeef8bad2b175cb69dfb14ab80fa6b19414f42ae178d74",
+  "sha256": "b1551610c13e2577ad67c974b4742b2d86ecb8e803663294bf1a6d36429685a6",
   "licensePath": "LICENSE",
   "licenseSha256": "e49073c7bf32784257f6fc1d6c97524cdaca3e9c5dec0ec3ee168adbcb32730e",
   "dictionaryVersion": "1.0",

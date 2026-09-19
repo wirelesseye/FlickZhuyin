@@ -652,7 +652,7 @@ final class DecoderProductionIntegrationTests: XCTestCase {
     }
 
     func testRawFallbackRemainsAvailable() throws {
-        let candidates = try decode(tokens("ㄅㄆ"))
+        let candidates = try decode(tokens("ㄅㄫ"))
         XCTAssertFalse(candidates.isEmpty)
         XCTAssertTrue(
             candidates.allSatisfy { candidate in
@@ -664,6 +664,36 @@ final class DecoderProductionIntegrationTests: XCTestCase {
                 }
             }
         )
+    }
+
+    func testInitialAbbreviationProducesWordCandidates() throws {
+        let candidates = try decode(tokens("ㄅ"))
+        let bu = candidates.filter { $0.text == "不" }
+        XCTAssertEqual(bu.count, 2)
+        XCTAssertEqual(Set(bu.map(\.pronunciation)), [
+            [SyllableConstraint(base: "ㄅㄨ", tone: .second)],
+            [SyllableConstraint(base: "ㄅㄨ", tone: .fourth)],
+        ])
+        for candidate in bu {
+            guard case let .word(edge)? = candidate.segments.first else {
+                return XCTFail("expected 不 to come from a dictionary word edge")
+            }
+            XCTAssertEqual(edge.syllableEdges.map(\.completeness), [.incomplete])
+            XCTAssertEqual(edge.syllableEdges.map(\.parserCost), [SyllableParser.incompleteCost])
+        }
+    }
+
+    func testConsecutiveInitialsProduceWordCandidates() throws {
+        let candidates = try decode(tokens("ㄅㄅ"))
+        let representative = candidates.first { $0.text == "爸爸" || $0.text == "寶寶" }
+        let candidate = try XCTUnwrap(representative)
+        guard case let .word(edge)? = candidate.segments.first else {
+            return XCTFail("expected a dictionary word edge")
+        }
+        XCTAssertEqual(edge.tokenRange, 0..<2)
+        XCTAssertEqual(edge.pronunciation.count, 2)
+        XCTAssertTrue(edge.pronunciation.allSatisfy { $0.base.first == "ㄅ" })
+        XCTAssertEqual(edge.syllableEdges.map(\.completeness), [.incomplete, .incomplete])
     }
 
     func testTonelessInputStaysBoundedAndFinite() throws {

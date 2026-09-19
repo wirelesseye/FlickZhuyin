@@ -31,7 +31,8 @@ final class ProductionDictionaryIntegrationTests: XCTestCase {
         let essayManifest = try readJSON(essayManifestURL)
         let report = try readJSON(reportURL)
 
-        XCTAssertEqual(metadata["schema_version"], "2")
+        XCTAssertEqual(metadata["schema_version"], "3")
+        XCTAssertEqual(metadata["compiler_version"], "3")
         XCTAssertEqual(metadata["terra_source_repository"], terraManifest["repository"] as? String)
         XCTAssertEqual(metadata["terra_source_commit"], terraManifest["commit"] as? String)
         XCTAssertEqual(metadata["terra_source_sha256"], terraManifest["sha256"] as? String)
@@ -50,6 +51,13 @@ final class ProductionDictionaryIntegrationTests: XCTestCase {
         XCTAssertEqual(Int(count), compiledEntries)
         let inventoryCount = try XCTUnwrap(database.rows("SELECT COUNT(*) FROM syllable_inventory").first?.first as? Int64)
         XCTAssertEqual(Int(inventoryCount), try XCTUnwrap(report["distinctZhuyinSyllables"] as? Int))
+        let initialKeys = try XCTUnwrap(
+            database.rows("SELECT COUNT(DISTINCT initial_key) FROM pronunciation").first?.first as? Int64
+        )
+        XCTAssertEqual(Int(initialKeys), try XCTUnwrap(report["distinctInitialKeys"] as? Int))
+        let integrity = try XCTUnwrap(report["initialKeyIntegrity"] as? [String: Int])
+        XCTAssertEqual(integrity["checkedEntries"], compiledEntries)
+        XCTAssertEqual(integrity["syllableCountMismatches"], 0)
     }
 
     func testRepresentativeQueries() throws {
@@ -78,6 +86,47 @@ final class ProductionDictionaryIntegrationTests: XCTestCase {
             for: [SyllableConstraint(base: "ㄋㄧ", tone: .third), SyllableConstraint(base: "ㄏㄠ", tone: .third)]
         )
         XCTAssertTrue(nihao.contains { $0.text == "你好" && $0.sourceWeight != nil })
+    }
+
+    func testInitialQueriesReturnFullPronunciations() throws {
+        let store = try SQLiteLexiconStore(url: databaseURL)
+        let single = try store.initialMatches(for: ["ㄅ"], limit: 64)
+        XCTAssertTrue(single.contains { $0.text == "不" })
+        for match in single {
+            XCTAssertEqual(match.pronunciation.count, 1)
+            XCTAssertEqual(match.pronunciation[0].base.first, "ㄅ")
+        }
+        XCTAssertLessThanOrEqual(single.count, 64)
+        XCTAssertTrue(
+            try store.initialMatches(for: ["ㄅ"], limit: 64).map(\.text)
+                == single.map(\.text)
+        )
+
+        let double = try store.initialMatches(for: ["ㄅ", "ㄅ"], limit: 64)
+        XCTAssertTrue(double.contains { $0.text == "爸爸" })
+        for match in double {
+            XCTAssertEqual(match.pronunciation.count, 2)
+            XCTAssertTrue(match.pronunciation.allSatisfy { $0.base.first == "ㄅ" })
+        }
+        let limited = try store.initialMatches(for: ["ㄅ", "ㄅ"], limit: 3)
+        XCTAssertEqual(limited.count, 3)
+        XCTAssertEqual(limited.map(\.text), Array(double.prefix(3).map(\.text)))
+    }
+
+    func testInitialKeyRowsAreConsistent() throws {
+        let database = try RawDatabase(url: databaseURL)
+        let mismatches = try XCTUnwrap(
+            database.rows(
+                "SELECT COUNT(*) FROM pronunciation WHERE "
+                    + "LENGTH(REPLACE(initial_key, char(31), '')) != syllable_count"
+            ).first?.first as? Int64
+        )
+        XCTAssertEqual(mismatches, 0)
+        let nulls = try XCTUnwrap(
+            database.rows("SELECT COUNT(*) FROM pronunciation WHERE initial_key IS NULL OR initial_key = ''")
+                .first?.first as? Int64
+        )
+        XCTAssertEqual(nulls, 0)
     }
 
     func testEssayRowsCarryWeightsAndProvenance() throws {
@@ -158,6 +207,14 @@ final class ProductionDictionaryIntegrationTests: XCTestCase {
         let detail = plan.compactMap { $0.last as? String }.joined(separator: " ").lowercased()
         XCTAssertTrue(detail.contains("pronunciation_base_key"), detail)
         XCTAssertTrue(detail.contains("search"), detail)
+
+        let initialPlan = try database.rows(
+            "EXPLAIN QUERY PLAN SELECT text, base_key, tone_key, source_weight FROM pronunciation "
+                + "WHERE initial_key = 'x' AND syllable_count = 2 ORDER BY source_weight DESC, id LIMIT 64"
+        )
+        let initialDetail = initialPlan.compactMap { $0.last as? String }.joined(separator: " ").lowercased()
+        XCTAssertTrue(initialDetail.contains("pronunciation_initial_key"), initialDetail)
+        XCTAssertTrue(initialDetail.contains("search"), initialDetail)
     }
 
     private func readJSON(_ url: URL) throws -> [String: Any] {

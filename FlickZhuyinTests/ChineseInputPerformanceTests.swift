@@ -61,6 +61,61 @@ final class ChineseInputPerformanceTests: XCTestCase {
         XCTAssertLessThan(percentile95(durations), maximumColdLookupP95)
     }
 
+    func testColdCacheInitialLookupLatency() throws {
+        let store = try SQLiteLexiconStore(url: databaseURL, cacheCapacity: 1)
+        let initials: [[Character]] = [
+            ["ㄅ"], ["ㄆ"], ["ㄇ"], ["ㄈ"], ["ㄉ"], ["ㄊ"], ["ㄋ"], ["ㄌ"], ["ㄓ"], ["ㄕ"],
+        ]
+        var durations: [TimeInterval] = []
+        for index in 0..<200 {
+            let query = initials[index % initials.count]
+            durations.append(try measure { _ = try store.initialMatches(for: query, limit: 64) })
+        }
+        durations.sort()
+        print(
+            "PERF cold-cache initial lookup average: \(milliseconds(average(durations))) ms, "
+                + "p50: \(milliseconds(durations[100])) ms, p95: \(milliseconds(durations[190])) ms"
+        )
+        XCTAssertLessThan(percentile95(durations), maximumColdLookupP95)
+    }
+
+    func testInitialQueryHonorsLimit() throws {
+        let store = try SQLiteLexiconStore(url: databaseURL)
+        for limit in [1, 5, 64] {
+            let matches = try store.initialMatches(for: ["ㄅ"], limit: limit)
+            XCTAssertLessThanOrEqual(matches.count, limit)
+        }
+    }
+
+    func testConsecutiveInitialPipelineLatency() throws {
+        let store = try SQLiteLexiconStore(url: databaseURL)
+        let parser = try SyllableParser(store: store)
+        let matcher = DictionaryMatcher(store: store)
+        let decoder = Decoder()
+        var durations: [TimeInterval] = []
+        for count in [2, 4, 8] {
+            let tokens = String(repeating: "ㄅ", count: count).map { ZhuyinInputToken.symbol($0) }
+            for _ in 0..<10 {
+                let syllableLattice = parser.lattice(for: tokens)
+                durations.append(
+                    try measure {
+                        let wordLattice = try matcher.buildLattice(from: syllableLattice)
+                        _ = try decoder.decode(
+                            syllableLattice: syllableLattice,
+                            wordLattice: wordLattice
+                        )
+                    }
+                )
+            }
+        }
+        durations.sort()
+        print(
+            "PERF consecutive-initial parser+matcher+decoder average: "
+                + "\(milliseconds(average(durations))) ms, max: \(milliseconds(durations.max() ?? 0)) ms"
+        )
+        XCTAssertLessThan(durations.max() ?? 0, maximumMatcherMaximum)
+    }
+
     func testWarmCacheExactLookupLatency() throws {
         let store = try SQLiteLexiconStore(url: databaseURL)
         let constraint = [SyllableConstraint(base: "ㄓㄨㄥ")]

@@ -68,7 +68,8 @@ final class SQLiteLexiconStoreTests: ChineseInputTestCase {
         let store = try makeFixtureStore()
         XCTAssertEqual(
             try store.syllableInventory(),
-            ["ㄉㄜ", "ㄋㄧ", "ㄋㄩ", "ㄌㄩ", "ㄍㄨㄛ", "ㄏㄠ", "ㄐㄧㄝ", "ㄓ", "ㄓㄨ", "ㄓㄨㄥ",
+            ["ㄅㄚ", "ㄅㄟ", "ㄅㄠ", "ㄅㄢ", "ㄅㄣ", "ㄅㄨ",
+             "ㄉㄜ", "ㄋㄧ", "ㄋㄩ", "ㄌㄩ", "ㄍㄨㄛ", "ㄏㄠ", "ㄐㄧㄝ", "ㄓ", "ㄓㄨ", "ㄓㄨㄥ",
              "ㄔ", "ㄕ", "ㄖ", "ㄧ", "ㄧㄣ", "ㄨㄛ", "ㄨㄣ", "ㄩ"]
         )
     }
@@ -183,6 +184,82 @@ final class SQLiteLexiconStoreTests: ChineseInputTestCase {
         XCTAssertEqual(first, second)
         XCTAssertEqual(first.map(\.text), ["是"])
     }
+
+    func testInitialMatchForSingleInitial() throws {
+        let store = try makeFixtureStore()
+        let matches = try store.initialMatches(for: ["ㄅ"], limit: 64)
+        XCTAssertEqual(matches.map(\.text), ["不", "把", "被", "本"])
+        XCTAssertEqual(
+            matches.map(\.pronunciation[0].base),
+            ["ㄅㄨ", "ㄅㄚ", "ㄅㄟ", "ㄅㄣ"]
+        )
+        XCTAssertEqual(matches.map(\.pronunciation[0].tone), [.fourth, .third, .fourth, .third])
+    }
+
+    func testInitialMatchForConsecutiveInitials() throws {
+        let store = try makeFixtureStore()
+        let matches = try store.initialMatches(for: ["ㄅ", "ㄅ"], limit: 64)
+        XCTAssertEqual(matches.map(\.text), ["爸爸", "寶寶", "北部", "版本"])
+        XCTAssertEqual(
+            matches[0].pronunciation,
+            [
+                CanonicalSyllable(base: "ㄅㄚ", tone: .fourth),
+                CanonicalSyllable(base: "ㄅㄚ", tone: .neutral),
+            ]
+        )
+        XCTAssertEqual(matches[0].sourceWeight, 0.95)
+    }
+
+    func testInitialMatchLimitAndOrderingAreDeterministic() throws {
+        let store = try makeFixtureStore()
+        let limited = try store.initialMatches(for: ["ㄅ"], limit: 2)
+        XCTAssertEqual(limited.map(\.text), ["不", "把"])
+        XCTAssertEqual(try store.initialMatches(for: ["ㄅ"], limit: 2), limited)
+        XCTAssertTrue(try store.initialMatches(for: ["ㄅ"], limit: 0).isEmpty)
+        XCTAssertTrue(try store.initialMatches(for: [], limit: 64).isEmpty)
+    }
+
+    func testInitialQueryUsesIndex() throws {
+        let url = temporaryURL("query-plan.sqlite3")
+        try copyFixture(to: url)
+        var handle: OpaquePointer?
+        XCTAssertEqual(sqlite3_open_v2(url.path, &handle, SQLITE_OPEN_READONLY, nil), SQLITE_OK)
+        guard let handle else {
+            return XCTFail("could not open \(url.path)")
+        }
+        defer { sqlite3_close(handle) }
+        var statement: OpaquePointer?
+        let sql = "EXPLAIN QUERY PLAN SELECT text, base_key, tone_key, source_weight "
+            + "FROM pronunciation WHERE initial_key = 'x' AND syllable_count = 2 "
+            + "ORDER BY source_weight DESC, id LIMIT 64"
+        XCTAssertEqual(sqlite3_prepare_v2(handle, sql, -1, &statement, nil), SQLITE_OK)
+        guard let statement else {
+            return XCTFail("could not prepare query plan")
+        }
+        defer { sqlite3_finalize(statement) }
+        var details: [String] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            for index in 0..<sqlite3_column_count(statement) {
+                if let pointer = sqlite3_column_text(statement, index) {
+                    details.append(String(cString: pointer))
+                }
+            }
+        }
+        let detail = details.joined(separator: " ").lowercased()
+        XCTAssertTrue(detail.contains("pronunciation_initial_key"), detail)
+        XCTAssertTrue(detail.contains("search"), detail)
+    }
+
+    func testSchemaVersionTwoDatabaseIsRejected() throws {
+        let url = temporaryURL("schema-two.sqlite3")
+        try copyFixture(to: url)
+        execute("PRAGMA user_version = 2", at: url)
+        XCTAssertThrowsError(try SQLiteLexiconStore(url: url)) { error in
+            guard case .schemaMismatch = error as? LexiconStoreError else {
+                return XCTFail("expected schemaMismatch, got \(error)")
+            }
+        }
+    }
 }
 
 final class SyllableParserTests: XCTestCase {
@@ -200,9 +277,44 @@ final class SyllableParserTests: XCTestCase {
 
     func testEveryLegalSegmentationIsKept() {
         let lattice = parser.lattice(for: tokens("ㄓㄨㄥ"))
-        let bases = Set(lattice.outgoingEdges[0].map(\.constraint.base))
-        XCTAssertEqual(bases, ["ㄓ", "ㄓㄨ", "ㄓㄨㄥ"])
-        XCTAssertTrue(lattice.outgoingEdges[0].allSatisfy { $0.completeness == .complete && $0.parserCost == 0 })
+        let complete = lattice.outgoingEdges[0].filter { $0.completeness == .complete }
+        XCTAssertEqual(Set(complete.map(\.constraint.base)), ["ㄓ", "ㄓㄨ", "ㄓㄨㄥ"])
+        XCTAssertTrue(complete.allSatisfy { $0.parserCost == 0 })
+    }
+
+    func testInitialAbbreviationEdgesAreEligible() {
+        let lattice = parser.lattice(for: tokens("ㄅㄅ"))
+        XCTAssertEqual(lattice.tokenCount, 2)
+        for position in 0..<2 {
+            let abbreviations = lattice.outgoingEdges[position].filter(\.isInitialAbbreviation)
+            XCTAssertEqual(abbreviations.map(\.constraint.base), ["ㄅ"])
+            XCTAssertEqual(abbreviations.map(\.tokenRange), [position..<(position + 1)])
+            XCTAssertEqual(abbreviations.map(\.parserCost), [SyllableParser.incompleteCost])
+        }
+        XCTAssertTrue(reachable(from: 0, to: 2, in: lattice))
+    }
+
+    func testCompleteSyllableThatIsAlsoAnInitialKeepsBothEdges() {
+        let lattice = parser.lattice(for: tokens("ㄓ"))
+        XCTAssertEqual(lattice.outgoingEdges[0].count, 2)
+        XCTAssertEqual(lattice.outgoingEdges[0].filter { $0.completeness == .complete }.count, 1)
+        let abbreviation = lattice.outgoingEdges[0].first { $0.isInitialAbbreviation }
+        XCTAssertEqual(abbreviation?.constraint, SyllableConstraint(base: "ㄓ"))
+        XCTAssertEqual(abbreviation?.tokenRange, 0..<1)
+        XCTAssertEqual(abbreviation?.parserCost, SyllableParser.incompleteCost)
+    }
+
+    func testVowelOnlySyllableIsNotAnInitialAbbreviation() {
+        let lattice = parser.lattice(for: tokens("ㄧ"))
+        XCTAssertEqual(lattice.outgoingEdges[0].count, 1)
+        XCTAssertEqual(lattice.outgoingEdges[0][0].completeness, .complete)
+        XCTAssertFalse(lattice.outgoingEdges[0][0].isInitialAbbreviation)
+    }
+
+    func testTonedSingleInitialIsNotAnInitialAbbreviation() {
+        let lattice = parser.lattice(for: tokens("ㄓ", tone: .fourth))
+        XCTAssertEqual(lattice.outgoingEdges[0].count, 1)
+        XCTAssertFalse(lattice.outgoingEdges[0].contains(where: \.isInitialAbbreviation))
     }
 
     func testTonelessInputCreatesCompleteEdges() {
@@ -416,17 +528,181 @@ final class DictionaryMatcherTests: XCTestCase {
         )
         XCTAssertTrue(lattice.outgoingEdges.allSatisfy(\.isEmpty))
     }
+
+    func testInitialAbbreviationEdgesUseInitialLookup() throws {
+        let bu = SyllableConstraint(base: "ㄅㄨ", tone: .fourth)
+        let store = StubLexiconStore(
+            inventory: ["ㄅㄨ"],
+            responses: [
+                [bu]: [LexiconMatch(text: "不", pronunciation: [CanonicalSyllable(base: "ㄅㄨ", tone: .fourth)], sourceWeight: nil)]
+            ],
+            initialResponses: [
+                ["ㄅ"]: [LexiconMatch(text: "不", pronunciation: [CanonicalSyllable(base: "ㄅㄨ", tone: .fourth)], sourceWeight: 0.9)]
+            ]
+        )
+        let parser = SyllableParser(syllableBases: store.inventory)
+        let lattice = try DictionaryMatcher(store: store).buildLattice(
+            from: parser.lattice(for: tokens("ㄅ"))
+        )
+        XCTAssertEqual(lattice.outgoingEdges[0].map(\.text), ["不"])
+        XCTAssertTrue(store.queries.isEmpty)
+        XCTAssertEqual(store.initialQueries, [["ㄅ"]])
+        XCTAssertEqual(store.initialLimits, [DictionaryMatcher.Configuration.initialMatchLimit])
+        let edge = try XCTUnwrap(lattice.outgoingEdges[0].first)
+        XCTAssertEqual(edge.tokenRange, 0..<1)
+        XCTAssertEqual(edge.syllableEdges.map(\.completeness), [.incomplete])
+        XCTAssertEqual(edge.pronunciation, [CanonicalSyllable(base: "ㄅㄨ", tone: .fourth)])
+        XCTAssertEqual(edge.sourceWeight, 0.9)
+    }
+
+    func testGeneralIncompletePrefixDoesNotUseInitialLookup() throws {
+        let store = StubLexiconStore(inventory: ["ㄧㄣ"])
+        let parser = SyllableParser(syllableBases: store.inventory)
+        let vowelLattice = try DictionaryMatcher(store: store).buildLattice(
+            from: parser.lattice(for: tokens("ㄧ"))
+        )
+        XCTAssertTrue(vowelLattice.outgoingEdges.allSatisfy(\.isEmpty))
+
+        let multiSymbolEdge = SyllableEdge(
+            tokenRange: 0..<2,
+            constraint: SyllableConstraint(base: "ㄍㄨ"),
+            completeness: .incomplete,
+            parserCost: SyllableParser.incompleteCost
+        )
+        let multiSymbolLattice = SyllableLattice(
+            tokenCount: 2,
+            outgoingEdges: [[multiSymbolEdge], [], []]
+        )
+        let wordLattice = try DictionaryMatcher(store: store).buildLattice(from: multiSymbolLattice)
+        XCTAssertTrue(wordLattice.outgoingEdges.allSatisfy(\.isEmpty))
+        XCTAssertTrue(store.initialQueries.isEmpty)
+        XCTAssertTrue(store.queries.isEmpty)
+    }
+
+    func testConsecutiveInitialsProduceSingleWordEdge() throws {
+        let baba = LexiconMatch(
+            text: "爸爸",
+            pronunciation: [
+                CanonicalSyllable(base: "ㄅㄚ", tone: .fourth),
+                CanonicalSyllable(base: "ㄅㄚ", tone: .neutral),
+            ],
+            sourceWeight: 0.95
+        )
+        let store = StubLexiconStore(
+            inventory: ["ㄅㄚ"],
+            initialResponses: [
+                ["ㄅ"]: [LexiconMatch(text: "爸", pronunciation: [CanonicalSyllable(base: "ㄅㄚ", tone: .fourth)], sourceWeight: 0.9)],
+                ["ㄅ", "ㄅ"]: [baba],
+            ]
+        )
+        let parser = SyllableParser(syllableBases: store.inventory)
+        let lattice = try DictionaryMatcher(store: store).buildLattice(
+            from: parser.lattice(for: tokens("ㄅㄅ"))
+        )
+        let edge = try XCTUnwrap(lattice.outgoingEdges[0].first { $0.text == "爸爸" })
+        XCTAssertEqual(edge.tokenRange, 0..<2)
+        XCTAssertEqual(edge.pronunciation, baba.pronunciation)
+        XCTAssertEqual(edge.syllableEdges.map(\.constraint.base), ["ㄅ", "ㄅ"])
+        XCTAssertEqual(edge.syllableEdges.map(\.completeness), [.incomplete, .incomplete])
+        XCTAssertEqual(store.initialQueries, [["ㄅ"], ["ㄅ", "ㄅ"]])
+    }
+
+    func testInitialQueryIsMemoizedAcrossStartPositions() throws {
+        let store = StubLexiconStore(
+            inventory: ["ㄅㄚ"],
+            initialResponses: [
+                ["ㄅ"]: [LexiconMatch(text: "爸", pronunciation: [CanonicalSyllable(base: "ㄅㄚ", tone: .fourth)], sourceWeight: 0.9)],
+            ]
+        )
+        let parser = SyllableParser(syllableBases: store.inventory)
+        _ = try DictionaryMatcher(store: store).buildLattice(
+            from: parser.lattice(for: tokens("ㄅㄅㄅ"))
+        )
+        let queries = store.initialQueries
+        XCTAssertEqual(Set(queries.map { $0.map(String.init).joined() }).count, queries.count)
+        XCTAssertEqual(queries.map(\.count), [1, 2, 3])
+    }
+
+    func testInitialQueryLimitAndMaxWordSyllablesAreApplied() throws {
+        let matches = (0..<8).map { index in
+            LexiconMatch(
+                text: "W\(index)",
+                pronunciation: [CanonicalSyllable(base: "ㄅㄚ", tone: .fourth)],
+                sourceWeight: 0.9 - Double(index) * 0.05
+            )
+        }
+        let store = StubLexiconStore(
+            inventory: ["ㄅㄚ"],
+            initialResponses: [["ㄅ"]: matches]
+        )
+        let parser = SyllableParser(syllableBases: store.inventory)
+        var configuration = DictionaryMatcher.Configuration()
+        configuration.initialMatchLimit = 3
+        configuration.maxWordSyllables = 2
+        let lattice = try DictionaryMatcher(store: store, configuration: configuration).buildLattice(
+            from: parser.lattice(for: tokens("ㄅㄅㄅ"))
+        )
+        XCTAssertEqual(lattice.outgoingEdges[0].count, 3)
+        XCTAssertTrue(store.initialLimits.allSatisfy { $0 == 3 })
+        XCTAssertTrue(store.initialQueries.allSatisfy { $0.count <= 2 })
+    }
+
+    func testLongInitialSequenceUsesLinearQueries() throws {
+        let store = StubLexiconStore(
+            inventory: ["ㄅㄚ"],
+            initialResponses: [
+                ["ㄅ"]: [LexiconMatch(text: "爸", pronunciation: [CanonicalSyllable(base: "ㄅㄚ", tone: .fourth)], sourceWeight: 0.9)]
+            ]
+        )
+        let parser = SyllableParser(syllableBases: store.inventory)
+        _ = try DictionaryMatcher(store: store).buildLattice(
+            from: parser.lattice(for: tokens(String(repeating: "ㄅ", count: 8)))
+        )
+        XCTAssertTrue(store.queries.isEmpty)
+        XCTAssertEqual(store.initialQueries.count, 8)
+        XCTAssertEqual(store.initialQueries.map(\.count), Array(1...8))
+    }
+
+    func testInitialExpansionDeduplicatesExactMatches() throws {
+        let zh = SyllableConstraint(base: "ㄓ")
+        let match = LexiconMatch(
+            text: "知",
+            pronunciation: [CanonicalSyllable(base: "ㄓ", tone: .first)],
+            sourceWeight: nil
+        )
+        let store = StubLexiconStore(
+            inventory: ["ㄓ"],
+            responses: [[zh]: [match]],
+            initialResponses: [["ㄓ"]: [match]]
+        )
+        let parser = SyllableParser(syllableBases: store.inventory)
+        let lattice = try DictionaryMatcher(store: store).buildLattice(
+            from: parser.lattice(for: tokens("ㄓ"))
+        )
+        XCTAssertEqual(lattice.outgoingEdges[0].map(\.text), ["知"])
+        XCTAssertEqual(lattice.outgoingEdges[0].first?.syllableEdges.map(\.completeness), [.complete])
+        XCTAssertEqual(store.queries, [[zh]])
+        XCTAssertEqual(store.initialQueries, [["ㄓ"]])
+    }
 }
 
 final class StubLexiconStore: LexiconStore, @unchecked Sendable {
     let inventory: [String]
     let responses: [[SyllableConstraint]: [LexiconMatch]]
+    let initialResponses: [[Character]: [LexiconMatch]]
     private(set) var queries: [[SyllableConstraint]] = []
+    private(set) var initialQueries: [[Character]] = []
+    private(set) var initialLimits: [Int] = []
     private let lock = NSLock()
 
-    init(inventory: [String], responses: [[SyllableConstraint]: [LexiconMatch]] = [:]) {
+    init(
+        inventory: [String],
+        responses: [[SyllableConstraint]: [LexiconMatch]] = [:],
+        initialResponses: [[Character]: [LexiconMatch]] = [:]
+    ) {
         self.inventory = inventory
         self.responses = responses
+        self.initialResponses = initialResponses
     }
 
     func exactMatches(for syllables: [SyllableConstraint]) throws -> [LexiconMatch] {
@@ -434,6 +710,14 @@ final class StubLexiconStore: LexiconStore, @unchecked Sendable {
         defer { lock.unlock() }
         queries.append(syllables)
         return responses[syllables] ?? []
+    }
+
+    func initialMatches(for initials: [Character], limit: Int) throws -> [LexiconMatch] {
+        lock.lock()
+        defer { lock.unlock() }
+        initialQueries.append(initials)
+        initialLimits.append(limit)
+        return Array((initialResponses[initials] ?? []).prefix(max(0, limit)))
     }
 
     func syllableInventory() throws -> [String] {

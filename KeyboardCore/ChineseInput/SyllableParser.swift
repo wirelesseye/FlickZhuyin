@@ -5,6 +5,16 @@ enum ZhuyinInputToken: Hashable, Sendable {
     case tone(MandarinTone)
 }
 
+enum ZhuyinInitials {
+    static let abbreviatable: Set<Character> = [
+        "ㄅ", "ㄆ", "ㄇ", "ㄈ",
+        "ㄉ", "ㄊ", "ㄋ", "ㄌ",
+        "ㄍ", "ㄎ", "ㄏ", "ㄐ", "ㄑ", "ㄒ",
+        "ㄓ", "ㄔ", "ㄕ", "ㄖ",
+        "ㄗ", "ㄘ", "ㄙ",
+    ]
+}
+
 struct SyllableParser: Sendable {
     static let maximumSyllableLength = 3
     static let incompleteCost = 4.0
@@ -62,16 +72,30 @@ struct SyllableParser: Sendable {
                         tone = nil
                     }
                     let isComplete = completeSyllables.contains(base)
-                    if isComplete || syllablePrefixes.contains(base) {
+                    let isPrefix = syllablePrefixes.contains(base)
+                    if isComplete || isPrefix {
                         createdEdge = true
-                        outgoing[index].append(
-                            SyllableEdge(
-                                tokenRange: index..<(index + length + (tone == nil ? 0 : 1)),
-                                constraint: SyllableConstraint(base: base, tone: tone),
-                                completeness: isComplete ? .complete : .incomplete,
-                                parserCost: isComplete ? 0 : Self.incompleteCost
+                        let tokenRange = index..<(index + length + (tone == nil ? 0 : 1))
+                        if isComplete {
+                            outgoing[index].append(
+                                SyllableEdge(
+                                    tokenRange: tokenRange,
+                                    constraint: SyllableConstraint(base: base, tone: tone),
+                                    completeness: .complete,
+                                    parserCost: 0
+                                )
                             )
-                        )
+                        }
+                        if !isComplete || Self.supportsInitialAbbreviation(base: base, tone: tone) {
+                            outgoing[index].append(
+                                SyllableEdge(
+                                    tokenRange: tokenRange,
+                                    constraint: SyllableConstraint(base: base, tone: tone),
+                                    completeness: .incomplete,
+                                    parserCost: Self.incompleteCost
+                                )
+                            )
+                        }
                     }
                     length += 1
                 }
@@ -92,6 +116,11 @@ struct SyllableParser: Sendable {
             index += 1
         }
         return SyllableLattice(tokenCount: tokens.count, outgoingEdges: outgoing)
+    }
+
+    static func supportsInitialAbbreviation(base: String, tone: MandarinTone?) -> Bool {
+        guard tone == nil, base.count == 1, let initial = base.first else { return false }
+        return ZhuyinInitials.abbreviatable.contains(initial)
     }
 
     private static func text(of tokens: [ZhuyinInputToken], in range: Range<Int>) -> String {

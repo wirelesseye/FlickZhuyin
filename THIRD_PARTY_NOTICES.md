@@ -32,6 +32,6 @@ Terra Pinyin 的詞典 header 說明其參考 CC-CEDICT，並將詞典資料標�
 - 發布者：MDBG
 - 授權：<https://creativecommons.org/licenses/by-sa/3.0/>
 
-FlickZhuyin 所附的 `flickzhuyin.sqlite3` 同時包含 Terra Pinyin 與 Rime Essay 的衍生資料：Terra 詞條與讀音部分依 CC BY-SA 3.0 提供，Essay 詞頻部分依 LGPL-3.0 提供。修改內容包括拼音至注音轉換、離線自動標音、詞頻正規化、資料去重、欄位正規化、索引建立及 SQLite 封裝。來源、commit、SHA-256、詞典版本及 compiler 版本均保存在 repository 的 `Vendor/` 下各 `SOURCE.json` 與 SQLite `metadata` table。
+FlickZhuyin 所附的 `flickzhuyin.sqlite3` 同時包含 Terra Pinyin 與 Rime Essay 的衍生資料：Terra 詞條與讀音部分依 CC BY-SA 3.0 提供，Essay 詞頻部分依 LGPL-3.0 提供。修改內容包括拼音至注音轉換、離線自動標音、詞頻正規化、資料去重、欄位正規化、完整讀音與聲母（initial）索引建立及 SQLite 封裝。來源、commit、SHA-256、詞典版本及 compiler 版本均保存在 repository 的 `Vendor/` 下各 `SOURCE.json` 與 SQLite `metadata` table。
 
 此資料不附帶任何擔保。CC BY-SA 3.0 的免責與責任限制條款適用。

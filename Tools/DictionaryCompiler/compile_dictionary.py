@@ -22,8 +22,8 @@ ESSAY_REPOSITORY = "https://github.com/rime/rime-essay"
 ESSAY_RAW_BASE_URL = "https://raw.githubusercontent.com/rime/rime-essay"
 ESSAY_PATH = "essay.txt"
 ESSAY_FORMAT_VERSION = 1
-COMPILER_VERSION = "2"
-SCHEMA_VERSION = 2
+COMPILER_VERSION = "3"
+SCHEMA_VERSION = 3
 REQUIRED_HEADER_KEYS = ("name", "version")
 REQUIRED_METADATA_KEYS = (
     "schema_version",
@@ -74,6 +74,7 @@ CREATE TABLE pronunciation (
     syllable_count    INTEGER NOT NULL,
     base_key          TEXT NOT NULL,
     tone_key          TEXT NOT NULL,
+    initial_key       TEXT NOT NULL,
     source_weight     REAL,
     source_kind       TEXT NOT NULL CHECK (source_kind IN ('terra', 'essay', 'terra+essay')),
     terra_source_line INTEGER,
@@ -85,6 +86,9 @@ CREATE TABLE pronunciation (
 
 CREATE INDEX pronunciation_base_key
 ON pronunciation(base_key, syllable_count);
+
+CREATE INDEX pronunciation_initial_key
+ON pronunciation(initial_key, syllable_count, source_weight DESC);
 """
 
 
@@ -202,6 +206,10 @@ class MergedEntry:
     @property
     def tone_key(self) -> str:
         return "".join(str(tone) for tone in self.tones)
+
+    @property
+    def initial_key(self) -> str:
+        return SEPARATOR.join(base[0] for base in self.base_syllables)
 
     @property
     def syllable_count(self) -> int:
@@ -770,6 +778,19 @@ def make_metadata(
     return metadata
 
 
+def validate_initial_keys(rows: list[MergedEntry]) -> int:
+    for row in rows:
+        if any(not base for base in row.base_syllables):
+            raise CompileFailure(f"entry {row.text!r} has an empty base syllable")
+        segments = row.initial_key.split(SEPARATOR)
+        if len(segments) != row.syllable_count or any(len(segment) != 1 for segment in segments):
+            raise CompileFailure(
+                f"entry {row.text!r} initial_key {row.initial_key!r} does not match "
+                f"{row.syllable_count} syllable(s)"
+            )
+    return len(rows)
+
+
 def write_database(
     path: Path,
     rows: list[MergedEntry],
@@ -796,15 +817,16 @@ def write_database(
         )
         connection.executemany(
             "INSERT INTO pronunciation ("
-            "text, syllable_count, base_key, tone_key, source_weight, source_kind,"
+            "text, syllable_count, base_key, tone_key, initial_key, source_weight, source_kind,"
             " terra_source_line, terra_source_lines, essay_source_line, raw_frequency"
-            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (
                     row.text,
                     row.syllable_count,
                     row.base_key,
                     row.tone_key,
+                    row.initial_key,
                     row.source_weight,
                     row.source_kind,
                     row.terra_source_line,
@@ -890,6 +912,7 @@ def build_database(
 
     inventory = sorted({base for row in rows for base in row.base_syllables})
     max_syllables = max((row.syllable_count for row in rows), default=0)
+    checked_initial_keys = validate_initial_keys(rows)
     metadata = make_metadata(
         terra_manifest,
         parsed_terra.header,
@@ -929,6 +952,11 @@ def build_database(
         "distinctWords": len({row.text for row in rows}),
         "distinctPinyinSyllables": len(distinct_pinyin),
         "distinctZhuyinSyllables": len(inventory),
+        "distinctInitialKeys": len({row.initial_key for row in rows}),
+        "initialKeyIntegrity": {
+            "checkedEntries": checked_initial_keys,
+            "syllableCountMismatches": 0,
+        },
         "maxSyllableCount": max_syllables,
         "weightedEntries": sum(1 for row in rows if row.source_weight is not None),
         "essayWeightedEntries": sum(1 for row in rows if row.raw_frequency is not None),

@@ -121,6 +121,41 @@ final class KeyboardCompositionTests: XCTestCase {
         XCTAssertEqual(engine.activeTokenText, "ㄓㄨˋ")
     }
 
+    func testDeleteUndoesInitialAbbreviationCandidateAndRestoresTokens() {
+        var engine = KeyboardEngine()
+        _ = engine.update(for: .zhuyin("ㄅ"))
+        _ = engine.update(for: .zhuyin("ㄅ"))
+        let baba = InputCandidate(
+            id: CandidateID(
+                text: "爸爸",
+                pronunciation: [
+                    SyllableConstraint(base: "ㄅㄚ", tone: .fourth),
+                    SyllableConstraint(base: "ㄅㄚ", tone: .neutral),
+                ],
+                tokenRange: 0..<2
+            ),
+            text: "爸爸",
+            pronunciation: [
+                SyllableConstraint(base: "ㄅㄚ", tone: .fourth),
+                SyllableConstraint(base: "ㄅㄚ", tone: .neutral),
+            ],
+            score: 1,
+            isRawFallback: false
+        )
+        let selection = engine.selectCandidate(baba)
+        XCTAssertEqual(selection.documentEffects, [.setMarkedText("爸爸", caret: 2)])
+        XCTAssertEqual(
+            engine.composition.selectedChunks.first?.sourceTokens,
+            [.symbol("ㄅ"), .symbol("ㄅ")]
+        )
+
+        let undo = engine.update(for: .delete)
+        XCTAssertEqual(undo.documentEffects, [.setMarkedText("ㄅㄅ", caret: 2)])
+        XCTAssertEqual(undo.candidateRequest?.tokens, [.symbol("ㄅ"), .symbol("ㄅ")])
+        XCTAssertEqual(engine.activeTokenText, "ㄅㄅ")
+        XCTAssertTrue(engine.composition.selectedChunks.isEmpty)
+    }
+
     func testDeletingLastPendingTokenEndsMarkedText() {
         var engine = KeyboardEngine()
         _ = engine.update(for: .zhuyin("ㄓ"))
@@ -258,6 +293,46 @@ final class ChineseInputPipelineTests: ChineseInputTestCase {
         XCTAssertEqual(Set(candidates.map(\.id)).count, candidates.count)
     }
 
+    func testFixtureExactCandidateOutranksInitialAbbreviationCandidate() async throws {
+        let pipeline = try LexiconChineseInputPipeline(store: try makeFixtureStore())
+        let candidates = try await pipeline.candidates(for: [.symbol("ㄓ")])
+        let exact = try XCTUnwrap(candidates.first { $0.text == "知" })
+        let abbreviated = try XCTUnwrap(candidates.first { $0.text == "中" })
+        XCTAssertEqual(candidates.first?.text, "知")
+        XCTAssertLessThan(exact.score, abbreviated.score)
+        XCTAssertTrue(candidates.contains { $0.isRawFallback && $0.text == "ㄓ" })
+    }
+
+    func testProductionPipelineProducesInitialAbbreviationCandidates() async throws {
+        let pipeline = try LexiconChineseInputPipeline(
+            store: try SQLiteLexiconStore(url: productionDatabaseURL)
+        )
+        let single = try await pipeline.candidates(for: [.symbol("ㄅ")])
+        XCTAssertTrue(single.contains { $0.text == "不" && !$0.isRawFallback })
+        XCTAssertTrue(single.contains { $0.isRawFallback && $0.text == "ㄅ" })
+        XCTAssertEqual(single.filter { $0.text == "不" }.count, 1)
+
+        let double = try await pipeline.candidates(for: [.symbol("ㄅ"), .symbol("ㄅ")])
+        XCTAssertTrue(double.contains { $0.text == "爸爸" || $0.text == "寶寶" })
+        XCTAssertTrue(double.contains { $0.isRawFallback && $0.text == "ㄅㄅ" })
+        XCTAssertLessThanOrEqual(double.filter { $0.text == "爸爸" }.count, 1)
+        XCTAssertLessThanOrEqual(double.filter { $0.text == "寶寶" }.count, 1)
+        XCTAssertLessThanOrEqual(double.count, Decoder().configuration.maximumCandidates)
+    }
+
+    func testMixedCompleteWordAndInitialCandidateCombine() async throws {
+        let pipeline = try LexiconChineseInputPipeline(
+            store: try SQLiteLexiconStore(url: productionDatabaseURL)
+        )
+        let tokens: [ZhuyinInputToken] = [
+            .symbol("ㄋ"), .symbol("ㄧ"), .tone(.third), .symbol("ㄅ"),
+        ]
+        let candidates = try await pipeline.candidates(for: tokens)
+        XCTAssertTrue(candidates.contains { $0.text == "你不" })
+        XCTAssertTrue(candidates.contains { $0.isRawFallback })
+        XCTAssertLessThanOrEqual(candidates.count, Decoder().configuration.maximumCandidates)
+    }
+
     func testProductionPipelineFindsZhuyinWithAndWithoutTones() async throws {
         let pipeline = try LexiconChineseInputPipeline(
             store: try SQLiteLexiconStore(url: productionDatabaseURL)
@@ -366,6 +441,10 @@ private final class FailingLexiconStore: LexiconStore, @unchecked Sendable {
         throw LexiconStoreError.queryFailed("unexpected query")
     }
 
+    func initialMatches(for initials: [Character], limit: Int) throws -> [LexiconMatch] {
+        throw LexiconStoreError.queryFailed("unexpected initial query")
+    }
+
     func syllableInventory() throws -> [String] {
         ["ㄓ"]
     }
@@ -382,6 +461,13 @@ private final class ThreadRecordingLexiconStore: LexiconStore, @unchecked Sendab
     }
 
     func exactMatches(for syllables: [SyllableConstraint]) throws -> [LexiconMatch] {
+        lock.lock()
+        mainThreadQuery = Thread.isMainThread
+        lock.unlock()
+        return []
+    }
+
+    func initialMatches(for initials: [Character], limit: Int) throws -> [LexiconMatch] {
         lock.lock()
         mainThreadQuery = Thread.isMainThread
         lock.unlock()
