@@ -68,11 +68,10 @@ final class CandidateBarView: UIView {
     }
 
     private func makeButton(for candidate: InputCandidate) -> UIButton {
-        let button = UIButton(type: .system)
+        let button = CandidateButton(type: .custom)
         button.configuration = nil
         button.setTitle(candidate.text, for: .normal)
         button.setTitleColor(.label, for: .normal)
-        button.backgroundColor = .clear
         button.contentEdgeInsets = UIEdgeInsets(top: 2, left: 10, bottom: 2, right: 10)
         button.titleLabel?.font = .preferredFont(forTextStyle: .title3)
         button.titleLabel?.adjustsFontForContentSizeCategory = true
@@ -91,5 +90,29 @@ final class CandidateBarView: UIView {
             for: .touchUpInside
         )
         return button
+    }
+}
+
+private final class CandidateButton: UIButton {
+    override var isHighlighted: Bool {
+        didSet { updateAppearance() }
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        layer.cornerRadius = 10
+        layer.cornerCurve = .continuous
+        clipsToBounds = true
+        updateAppearance()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    private func updateAppearance() {
+        alpha = 1
+        titleLabel?.alpha = 1
+        backgroundColor = isHighlighted ? KeyboardButton.standardKeyColor : .clear
     }
 }
