@@ -637,6 +637,20 @@ final class DecoderProductionIntegrationTests: XCTestCase {
         XCTAssertEqual(candidates, try decode(tokens("ㄓㄨㄧㄣ")))
     }
 
+    func testSameTextKeepsSeparatePronunciationsInDecoder() throws {
+        let candidates = try decode(tokens("ㄧ"))
+        let yi = candidates.filter { $0.text == "一" }
+        XCTAssertEqual(yi.count, 3)
+        XCTAssertEqual(
+            Set(yi.map(\.pronunciation)),
+            [
+                [SyllableConstraint(base: "ㄧ", tone: .first)],
+                [SyllableConstraint(base: "ㄧ", tone: .second)],
+                [SyllableConstraint(base: "ㄧ", tone: .fourth)],
+            ]
+        )
+    }
+
     func testRawFallbackRemainsAvailable() throws {
         let candidates = try decode(tokens("ㄅㄆ"))
         XCTAssertFalse(candidates.isEmpty)

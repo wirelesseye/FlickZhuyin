@@ -49,16 +49,35 @@ final class LexiconChineseInputPipeline: ChineseInputPipeline, @unchecked Sendab
         let syllableLattice = parser.lattice(for: tokens)
         let wordLattice = try matcher.buildLattice(from: syllableLattice)
         let decoded = try decoder.decode(syllableLattice: syllableLattice, wordLattice: wordLattice)
-        var candidates = decoded.map(InputCandidate.init(decoded:))
+        let candidates = Self.mergedByText(decoded.map(InputCandidate.init(decoded:)))
         guard !candidates.contains(where: \.isRawFallback) else {
             return candidates
         }
         let limit = decoder.configuration.maximumCandidates
-        candidates = Array(candidates.prefix(max(0, limit - 1)))
+        var limited = Array(candidates.prefix(max(0, limit - 1)))
         if let fallback = rawFallback(for: tokens, lattice: syllableLattice) {
-            candidates.append(fallback)
+            limited.append(fallback)
         }
-        return candidates
+        return limited
+    }
+
+    private static func mergedByText(_ candidates: [InputCandidate]) -> [InputCandidate] {
+        var bestIndexByText: [String: Int] = [:]
+        for (index, candidate) in candidates.enumerated() where !candidate.isRawFallback {
+            guard let bestIndex = bestIndexByText[candidate.text] else {
+                bestIndexByText[candidate.text] = index
+                continue
+            }
+            if candidate.score < candidates[bestIndex].score {
+                bestIndexByText[candidate.text] = index
+            }
+        }
+        return candidates.enumerated().compactMap { index, candidate in
+            guard candidate.isRawFallback || bestIndexByText[candidate.text] == index else {
+                return nil
+            }
+            return candidate
+        }
     }
 
     private func rawFallback(

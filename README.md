@@ -80,7 +80,7 @@ FlickZhuyin 是一個實驗性的 iOS 自訂注音鍵盤，使用類似日文假
 中文 composition 由「已選文字」與「未選注音」兩部分組成，會以 marked text 即時顯示在宿主輸入框。例如 `ㄓㄨˋ → 注 → ㄧㄣˉ → 注音`：
 
 - 輸入注音後，輸入框立即顯示原始注音（例如 `注ㄧㄣˉ`），候選列同步查詢 production 詞典。
-- 候選列在查詢完成前先顯示原始注音 fallback，完成後換成 Decoder 的 Top-K 候選；raw 注音候選一定保留。
+- 候選列在查詢完成前先顯示原始注音 fallback，完成後換成 Decoder 的 Top-K 候選；候選列依文字合併、每組保留分數最低者，raw 注音候選獨立保留。
 - 點擊候選會把文字加入 composition，並保留產生它的注音；可繼續輸入下一段，不會提前結束組字。
 - 有未選注音時，中央按鍵是聲調鍵；只有已選文字時，中央按鍵是一般空白鍵。
 - Return 會提交 composition（`unmarkText` 後插入換行）；尚未選字的注音會原樣提交。
@@ -126,7 +126,7 @@ Generated/                     編譯產物（SQLite 詞典與 report）
 - `SQLiteLexiconStore` 以唯讀模式開啟 bundle 內的 SQLite 詞典，只把 400 多個合法無調注音載入記憶體，發音資料則按需求查詢。
 - `DictionaryMatcher` 沿音節格查詢詞庫，產生可含多詞、多讀音的詞格，不做 `5^n` 聲調展開。
 - `Decoder` 將詞格與 raw 注音音節合併成永遠連通的解碼圖，以精確 Top-K DAG 動態規劃輸出穩定排序的候選；沒有詞典匹配的片段會以原始注音保留。
-- `LexiconChineseInputPipeline` 在初始化時建立並長期持有 store、parser、matcher 與 decoder，把 Top-K 結果轉成精簡的 `InputCandidate`，並在必要時補上 raw 注音候選。
+- `LexiconChineseInputPipeline` 在初始化時建立並長期持有 store、parser、matcher 與 decoder，把 Top-K 結果轉成精簡的 `InputCandidate`；轉換時依文字合併候選、每組保留分數最低者，raw 注音候選不受合併影響，並在必要時補上 raw 注音候選。
 - 排序由可替換的 `DecoderScorer` 負責，目前 `BaselineDecoderScorer` 只使用稀疏的 Rime `sourceWeight`、parser cost 與簡易分詞懲罰，不是完整的語言模型排序。
 
 `FlickZhuyinKeyboard/ChineseInputCoordinator.swift` 負責非同步協調：每次 pending tokens 改變就增加 revision、先發布 raw fallback，背景完成後只在 revision 與 token snapshot 都相符時套用結果；`KeyboardDocumentClient` 與 `DocumentEffectApplier` 隔離 `UITextDocumentProxy`，`CandidateBarView` 提供固定高度的水平候選列。
@@ -160,7 +160,7 @@ xcodebuild \
 - 音節格切分、incomplete/fallback 連通性
 - 詞格的多字詞、去重與展開上限
 - decoder 的 scoring、lattice 驗證、Top-K 限制、去重與 deterministic tie-break
-- pipeline 的 fixture 與 production 候選、raw fallback 保留、空輸入與錯誤傳遞
+- pipeline 的 fixture 與 production 候選、同文字候選合併、raw fallback 保留、空輸入與錯誤傳遞
 - coordinator 的 stale result 防護、invalidate 與初始化失敗 fallback
 - document effect applier 的 UTF-16 selection、替換 marked text 與提交順序
 - 「注音」在有聲調與無聲調輸入下都出現在 Top 10，且來自單一詞典詞條

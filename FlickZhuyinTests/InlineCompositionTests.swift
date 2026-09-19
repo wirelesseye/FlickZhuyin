@@ -274,6 +274,67 @@ final class ChineseInputPipelineTests: ChineseInputTestCase {
         }
     }
 
+    func testTonelessYiMergesRepeatedCandidateText() async throws {
+        let pipeline = try LexiconChineseInputPipeline(
+            store: try SQLiteLexiconStore(url: productionDatabaseURL)
+        )
+        let candidates = try await pipeline.candidates(for: [.symbol("ㄧ")])
+        XCTAssertEqual(candidates.filter { $0.text == "一" }.count, 1)
+        XCTAssertEqual(candidates.first?.text, "一")
+    }
+
+    func testExplicitYiTonesStillMatchYi() async throws {
+        let pipeline = try LexiconChineseInputPipeline(
+            store: try SQLiteLexiconStore(url: productionDatabaseURL)
+        )
+        for tone in [MandarinTone.first, .second, .fourth] {
+            let candidates = try await pipeline.candidates(for: [.symbol("ㄧ"), .tone(tone)])
+            XCTAssertTrue(candidates.contains { $0.text == "一" }, "tone \(tone)")
+        }
+    }
+
+    func testTonelessYiKeepsRawFallback() async throws {
+        let pipeline = try LexiconChineseInputPipeline(
+            store: try SQLiteLexiconStore(url: productionDatabaseURL)
+        )
+        let candidates = try await pipeline.candidates(for: [.symbol("ㄧ")])
+        let fallback = try XCTUnwrap(candidates.first { $0.isRawFallback })
+        XCTAssertEqual(fallback.text, "ㄧ")
+        XCTAssertEqual(fallback.pronunciation, [SyllableConstraint(base: "ㄧ")])
+    }
+
+    func testMergedCandidateKeepsLowestScore() async throws {
+        let yi = SyllableConstraint(base: "ㄧ")
+        let store = StubLexiconStore(
+            inventory: ["ㄧ"],
+            responses: [
+                [yi]: [
+                    LexiconMatch(
+                        text: "一",
+                        pronunciation: [CanonicalSyllable(base: "ㄧ", tone: .first)],
+                        sourceWeight: 0.5
+                    ),
+                    LexiconMatch(
+                        text: "一",
+                        pronunciation: [CanonicalSyllable(base: "ㄧ", tone: .fourth)],
+                        sourceWeight: 0.9
+                    ),
+                    LexiconMatch(
+                        text: "以",
+                        pronunciation: [CanonicalSyllable(base: "ㄧ", tone: .third)],
+                        sourceWeight: 0.8
+                    ),
+                ]
+            ]
+        )
+        let pipeline = try LexiconChineseInputPipeline(store: store)
+        let candidates = try await pipeline.candidates(for: [.symbol("ㄧ")])
+        let merged = candidates.filter { $0.text == "一" }
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged.first?.pronunciation, [SyllableConstraint(base: "ㄧ", tone: .fourth)])
+        XCTAssertTrue(candidates.contains { $0.isRawFallback })
+    }
+
     func testEmptyTokensReturnNoCandidatesWithoutQuerying() async throws {
         let pipeline = try LexiconChineseInputPipeline(store: FailingLexiconStore())
         let candidates = try await pipeline.candidates(for: [])
