@@ -96,7 +96,7 @@ final class DecoderScorerTests: XCTestCase {
 
     func testWeightedWordCostUsesNegativeLogWeight() throws {
         let word = testWord(0, 1, text: "中", syllables: [SyllableConstraint(base: "ㄓ", tone: .first)], weight: 0.25, parserCost: 0.5)
-        XCTAssertEqual(try scorer.cost(for: word), 0.5 + (-log(0.25)) + 0.25, accuracy: 1e-12)
+        XCTAssertEqual(try scorer.cost(for: word), 0.5 + (-log(0.25)) + 0.35, accuracy: 1e-12)
     }
 
     func testUnweightedWordCostUsesConfigurationValue() throws {
@@ -111,14 +111,14 @@ final class DecoderScorerTests: XCTestCase {
             ],
             weight: nil
         )
-        XCTAssertEqual(try scorer.cost(for: word), 8.0 + 0.25, accuracy: 1e-12)
+        XCTAssertEqual(try scorer.cost(for: word), 8.0 + 0.35, accuracy: 1e-12)
     }
 
     func testZeroWeightUsesFloorAndStaysFinite() throws {
         let word = testWord(0, 1, text: "中", syllables: [SyllableConstraint(base: "ㄓ", tone: .first)], weight: 0)
         let cost = try scorer.cost(for: word)
         XCTAssertTrue(cost.isFinite)
-        XCTAssertEqual(cost, (-log(1e-9)) + 0.25, accuracy: 1e-9)
+        XCTAssertEqual(cost, (-log(1e-9)) + 0.35, accuracy: 1e-9)
     }
 
     func testIllegalWeightsThrow() {
@@ -141,7 +141,7 @@ final class DecoderScorerTests: XCTestCase {
             weight: nil,
             parserCost: 1.5
         )
-        XCTAssertEqual(try scorer.cost(for: word), 3.0 + 8.0 + 0.25, accuracy: 1e-12)
+        XCTAssertEqual(try scorer.cost(for: word), 3.0 + 8.0 + 0.35, accuracy: 1e-12)
     }
 
     func testRawCompletenessPenalties() throws {
@@ -383,7 +383,7 @@ final class DecoderTests: XCTestCase {
             SyllableConstraint(base: "ㄓ", tone: .first),
             SyllableConstraint(base: "ㄨ", tone: .first),
         ])
-        XCTAssertEqual(merged[0].score, (-log(0.9)) + 0.25, accuracy: 1e-12)
+        XCTAssertEqual(merged[0].score, (-log(0.9)) + 0.35, accuracy: 1e-12)
         XCTAssertEqual(merged[0].segments.count, 1)
     }
 

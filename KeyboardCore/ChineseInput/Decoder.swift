@@ -11,7 +11,7 @@ struct DecoderConfiguration: Equatable, Sendable {
     var maximumCandidates = 10
     var weightedEntryFloor = 1e-9
     var unweightedWordCost = 8.0
-    var wordBoundaryCost = 0.25
+    var wordBoundaryCost = 0.35
     var completeRawCost = 12.0
     var incompleteRawCost = 16.0
     var fallbackRawCost = 20.0
