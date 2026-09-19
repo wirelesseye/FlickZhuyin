@@ -23,8 +23,8 @@ enum KeyHaptics {
 class KeyboardButton: UIButton {
     static let standardKeyColor = UIColor { traits in
         traits.userInterfaceStyle == .dark
-            ? UIColor(white: 0.28, alpha: 1)
-            : UIColor(white: 1, alpha: 1)
+            ? UIColor(white: 0.28, alpha: 0.85)
+            : UIColor(white: 1, alpha: 0.85)
     }
 
     var normalColor: UIColor = KeyboardButton.standardKeyColor {
