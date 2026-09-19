@@ -74,6 +74,8 @@
 		A10000000000000000000041 /* KeyboardDocumentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001E /* KeyboardDocumentClient.swift */; };
 		A10000000000000000000042 /* InlineCompositionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001F /* InlineCompositionTests.swift */; };
 		A10000000000000000000043 /* ExpandedCandidateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000020 /* ExpandedCandidateView.swift */; };
+		A10000000000000000000044 /* KeyboardSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000021 /* KeyboardSettings.swift */; };
+		A10000000000000000000045 /* KeyboardSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000021 /* KeyboardSettings.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -147,6 +149,9 @@
 		B1000000000000000000001E /* KeyboardDocumentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardDocumentClient.swift; sourceTree = "<group>"; };
 		B1000000000000000000001F /* InlineCompositionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlineCompositionTests.swift; sourceTree = "<group>"; };
 		B10000000000000000000020 /* ExpandedCandidateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpandedCandidateView.swift; sourceTree = "<group>"; };
+		B10000000000000000000021 /* KeyboardSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardSettings.swift; sourceTree = "<group>"; };
+		B10000000000000000000022 /* FlickZhuyin.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FlickZhuyin.entitlements; sourceTree = "<group>"; };
+		B10000000000000000000023 /* FlickZhuyinKeyboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FlickZhuyinKeyboard.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -196,6 +201,7 @@
 				B00000000000000000000001 /* FlickZhuyinApp.swift */,
 				B00000000000000000000002 /* ContentView.swift */,
 				B1000000000000000000000F /* ThirdPartyLicensesView.swift */,
+				B10000000000000000000022 /* FlickZhuyin.entitlements */,
 			);
 			path = FlickZhuyinApp;
 			sourceTree = "<group>";
@@ -211,6 +217,7 @@
 				B1000000000000000000001D /* CandidateBarView.swift */,
 				B10000000000000000000020 /* ExpandedCandidateView.swift */,
 				B1000000000000000000001E /* KeyboardDocumentClient.swift */,
+				B10000000000000000000023 /* FlickZhuyinKeyboard.entitlements */,
 			);
 			path = FlickZhuyinKeyboard;
 			sourceTree = "<group>";
@@ -222,6 +229,7 @@
 				B00000000000000000000006 /* KeyboardLayout.swift */,
 				B00000000000000000000007 /* KeyboardEngine.swift */,
 				B0000000000000000000000E /* ZhuyinLayout.swift */,
+				B10000000000000000000021 /* KeyboardSettings.swift */,
 				D10000000000000000000007 /* ChineseInput */,
 			);
 			path = KeyboardCore;
@@ -444,6 +452,7 @@
 				A00000000000000000000001 /* FlickZhuyinApp.swift in Sources */,
 				A00000000000000000000002 /* ContentView.swift in Sources */,
 				A10000000000000000000027 /* ThirdPartyLicensesView.swift in Sources */,
+				A10000000000000000000044 /* KeyboardSettings.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -477,6 +486,7 @@
 				A1000000000000000000003B /* CandidateBarView.swift in Sources */,
 				A10000000000000000000043 /* ExpandedCandidateView.swift in Sources */,
 				A1000000000000000000003C /* KeyboardDocumentClient.swift in Sources */,
+				A10000000000000000000045 /* KeyboardSettings.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -566,6 +576,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = FlickZhuyinApp/FlickZhuyin.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 794A5QCL7Y;
@@ -587,6 +598,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = FlickZhuyinApp/FlickZhuyin.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 794A5QCL7Y;
@@ -608,6 +620,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = FlickZhuyinKeyboard/FlickZhuyinKeyboard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 794A5QCL7Y;
@@ -626,6 +639,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = FlickZhuyinKeyboard/FlickZhuyinKeyboard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 794A5QCL7Y;

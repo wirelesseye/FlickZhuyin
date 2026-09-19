@@ -251,7 +251,8 @@ FlickZhuyin Keyboard Extension：
 - 不使用網路
 - 不儲存或傳送輸入內容
 - 只以唯讀模式查詢 App bundle 內建的 SQLite 詞庫，不寫入資料庫
-- 不使用 App Group、共享容器或雲端同步
+- App Group 共享容器僅存放「是否顯示四方向符號」這項顯示偏好，不存放輸入內容
+- 不使用雲端同步
 
 開啟 Full Access 會解除 iOS 對第三方鍵盤的部分系統限制，但 FlickZhuyin 不會藉此讀取、儲存或傳送使用者輸入內容。
 

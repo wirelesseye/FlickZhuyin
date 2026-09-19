@@ -14,6 +14,7 @@ final class KeyboardViewController: UIInputViewController {
     private var heightConstraint: NSLayoutConstraint?
     private var isCandidateListExpanded = false
     private var documentEffectDepth = 0
+    private var showsDirectionalSymbols = KeyboardSettings.showsDirectionalSymbols
 
     private var coordinator: ChineseInputCoordinator?
 
@@ -27,6 +28,14 @@ final class KeyboardViewController: UIInputViewController {
         view.backgroundColor = .clear
         KeyHaptics.prepare()
         configureHeight()
+        rebuildKeyboard()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        let shows = KeyboardSettings.showsDirectionalSymbols
+        guard shows != showsDirectionalSymbols else { return }
+        showsDirectionalSymbols = shows
         rebuildKeyboard()
     }
 
@@ -130,6 +139,10 @@ final class KeyboardViewController: UIInputViewController {
                     guard let symbol = mapping[direction], let character = symbol.first else { return }
                     self?.handle(.zhuyin(character))
                 }
+                if showsDirectionalSymbols {
+                    button.directionalFaceStyle = .zhuyin
+                    button.directionalFace = mapping
+                }
                 row.addArrangedSubview(button)
             }
             let trailingColumn: UIView = switch rowIndex {
@@ -204,13 +217,12 @@ final class KeyboardViewController: UIInputViewController {
 
     private func makePunctuationControl() -> FlickKeyButton {
         let mapping = ZhuyinLayout.punctuation
-        let symbols = mappingSymbols(mapping)
         let button = makeFlickButton(mapping: mapping) { [weak self] direction in
             guard let symbol = mapping[direction] else { return }
             self?.insertPunctuation(symbol)
         }
-        applyPunctuationFace(button, symbols: symbols)
-        button.accessibilityLabel = symbols
+        applyPunctuationFace(button, mapping: mapping)
+        button.accessibilityLabel = mappingSymbols(mapping)
         return button
     }
 
@@ -226,18 +238,22 @@ final class KeyboardViewController: UIInputViewController {
                 self.insertPunctuation(symbol)
             }
         }
-        applyPunctuationFace(button, symbols: mappingSymbols(mapping))
+        applyPunctuationFace(button, mapping: mapping)
         button.accessibilityLabel = mappingSymbols(mapping)
         return button
     }
 
-    private func applyPunctuationFace(_ button: FlickKeyButton, symbols: String) {
+    private func applyPunctuationFace(_ button: FlickKeyButton, mapping: FlickKeyMapping) {
+        guard !showsDirectionalSymbols else {
+            button.directionalFace = mapping
+            return
+        }
+        button.directionalFace = nil
         button.setAttributedTitle(
             NSAttributedString(
-                string: symbols,
+                string: mapping.center,
                 attributes: [
                     .font: UIFont.systemFont(ofSize: 18),
-                    .kern: -4.5,
                     .foregroundColor: UIColor.label
                 ]
             ),
@@ -434,6 +450,7 @@ final class KeyboardViewController: UIInputViewController {
             let hasPending = engine.hasActiveTokens
             if hasPending {
                 neutralToneButton?.mapping = FlickKeyMapping([MandarinTone.neutral.symbol])
+                neutralToneButton?.directionalFace = nil
                 neutralToneButton?.showsPreview = false
                 neutralToneButton?.setAttributedTitle(
                     ToneSymbolStyle.attributedText(
@@ -445,13 +462,10 @@ final class KeyboardViewController: UIInputViewController {
                 neutralToneButton?.accessibilityLabel = "輕聲"
             } else {
                 neutralToneButton?.mapping = ZhuyinLayout.secondaryPunctuation
-                neutralToneButton?.showsPreview = true
                 if let neutralToneButton {
-                    applyPunctuationFace(
-                        neutralToneButton,
-                        symbols: mappingSymbols(ZhuyinLayout.secondaryPunctuation)
-                    )
+                    applyPunctuationFace(neutralToneButton, mapping: ZhuyinLayout.secondaryPunctuation)
                 }
+                neutralToneButton?.showsPreview = true
                 neutralToneButton?.accessibilityLabel = mappingSymbols(
                     ZhuyinLayout.secondaryPunctuation
                 )
@@ -462,14 +476,21 @@ final class KeyboardViewController: UIInputViewController {
             toneButton?.showsPreview = hasPending
             if hasPending {
                 toneButton?.setImage(nil, for: .normal)
-                toneButton?.setAttributedTitle(
-                    ToneSymbolStyle.attributedText(
-                        for: MandarinTone.first.symbol,
-                        fontSize: ToneSymbolStyle.keyFontSize
-                    ),
-                    for: .normal
-                )
+                if showsDirectionalSymbols {
+                    toneButton?.directionalFaceStyle = .tone
+                    toneButton?.directionalFace = ZhuyinLayout.tones
+                } else {
+                    toneButton?.directionalFace = nil
+                    toneButton?.setAttributedTitle(
+                        ToneSymbolStyle.attributedText(
+                            for: MandarinTone.first.symbol,
+                            fontSize: ToneSymbolStyle.keyFontSize
+                        ),
+                        for: .normal
+                    )
+                }
             } else {
+                toneButton?.directionalFace = nil
                 toneButton?.setAttributedTitle(nil, for: .normal)
                 toneButton?.setTitle(nil, for: .normal)
                 toneButton?.setImage(keyIcon(named: "space"), for: .normal)
