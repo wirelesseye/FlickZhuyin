@@ -1,6 +1,59 @@
 import UIKit
 
-final class CandidateBarView: UIView, UIScrollViewDelegate {
+enum CandidateMetrics {
+    static let contentInsets = UIEdgeInsets(top: 2, left: 10, bottom: 2, right: 10)
+    static let itemHeight: CGFloat = 40
+
+    static func itemWidth(_ text: String) -> CGFloat {
+        let font = UIFont.preferredFont(forTextStyle: .title3)
+        let width = ceil((text as NSString).size(withAttributes: [.font: font]).width)
+        return width + contentInsets.left + contentInsets.right
+    }
+}
+
+final class CandidateCell: UICollectionViewCell {
+    static let reuseIdentifier = "CandidateCell"
+
+    private(set) var candidate: InputCandidate?
+    private var onSelect: ((InputCandidate) -> Void)?
+    private let button = CandidateButton(type: .custom)
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(button)
+        NSLayoutConstraint.activate([
+            button.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            button.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            button.topAnchor.constraint(equalTo: contentView.topAnchor),
+            button.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+        ])
+        button.addAction(
+            UIAction { [weak self] _ in
+                guard let self, let candidate else { return }
+                KeyHaptics.keyDown()
+                onSelect?(candidate)
+            },
+            for: .touchUpInside
+        )
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(
+        with candidate: InputCandidate,
+        adjustsTitleToFit: Bool,
+        onSelect: @escaping (InputCandidate) -> Void
+    ) {
+        self.candidate = candidate
+        self.onSelect = onSelect
+        button.update(with: candidate, adjustsTitleToFit: adjustsTitleToFit)
+    }
+}
+
+final class CandidateBarView: UIView, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
     var onSelect: ((InputCandidate) -> Void)?
     var onToggleExpansion: (() -> Void)?
     var onVisibleCandidatesChanged: ((Int) -> Void)?
@@ -10,6 +63,8 @@ final class CandidateBarView: UIView, UIScrollViewDelegate {
     private var isTransitioningExpansion = false
     private var isAdjustingLayout = false
     private var hasCandidates = false
+    private var candidates: [InputCandidate] = []
+    private var widthCache: [String: CGFloat] = [:]
 
     static let animationDuration: TimeInterval = 0.25
 
@@ -20,8 +75,8 @@ final class CandidateBarView: UIView, UIScrollViewDelegate {
     private static let expandButtonContentWidth: CGFloat = 36
     private static let dividerHeight: CGFloat = 20
 
-    private let scrollView = UIScrollView()
-    private let stackView = UIStackView()
+    private let flowLayout = UICollectionViewFlowLayout()
+    private lazy var collectionView = UICollectionView(frame: .zero, collectionViewLayout: flowLayout)
     private let expandButton = UIButton(type: .system)
     private let dividerView = UIView()
     private let hitSurfaceView = UIView()
@@ -30,17 +85,34 @@ final class CandidateBarView: UIView, UIScrollViewDelegate {
         super.init(frame: frame)
         backgroundColor = .clear
 
-        scrollView.delegate = self
-        scrollView.showsHorizontalScrollIndicator = false
-        scrollView.alwaysBounceHorizontal = false
+        flowLayout.scrollDirection = .horizontal
+        flowLayout.minimumInteritemSpacing = Self.collapsedSpacing
+        flowLayout.minimumLineSpacing = 0
+        flowLayout.sectionInset = UIEdgeInsets(
+            top: 0,
+            left: Self.contentInset,
+            bottom: 0,
+            right: Self.contentInset
+        )
+
+        collectionView.dataSource = self
+        collectionView.delegate = self
+        collectionView.register(
+            CandidateCell.self,
+            forCellWithReuseIdentifier: CandidateCell.reuseIdentifier
+        )
+        collectionView.backgroundColor = KeyboardSurface.interactionColor
+        collectionView.showsHorizontalScrollIndicator = false
+        collectionView.alwaysBounceHorizontal = false
+        collectionView.contentInsetAdjustmentBehavior = .never
         if #available(iOS 26.0, *) {
-            scrollView.topEdgeEffect.isHidden = true
-            scrollView.leftEdgeEffect.isHidden = true
-            scrollView.bottomEdgeEffect.isHidden = true
-            scrollView.rightEdgeEffect.isHidden = true
+            collectionView.topEdgeEffect.isHidden = true
+            collectionView.leftEdgeEffect.isHidden = true
+            collectionView.bottomEdgeEffect.isHidden = true
+            collectionView.rightEdgeEffect.isHidden = true
         }
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(scrollView)
+        collectionView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(collectionView)
 
         expandButton.setImage(
             UIImage(
@@ -79,21 +151,15 @@ final class CandidateBarView: UIView, UIScrollViewDelegate {
         // Keyboard extensions are hosted in a remote window whose input region can
         // omit fully transparent pixels. Render an imperceptible surface so the
         // whole area to the right of the divider remains part of that input region.
-        hitSurfaceView.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.02)
+        hitSurfaceView.backgroundColor = KeyboardSurface.interactionColor
         hitSurfaceView.isUserInteractionEnabled = false
         insertSubview(hitSurfaceView, belowSubview: expandButton)
 
-        stackView.axis = .horizontal
-        stackView.alignment = .fill
-        stackView.spacing = Self.collapsedSpacing
-        stackView.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.addSubview(stackView)
-
         NSLayoutConstraint.activate([
-            scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: dividerView.leadingAnchor, constant: -8),
-            scrollView.topAnchor.constraint(equalTo: topAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            collectionView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            collectionView.trailingAnchor.constraint(equalTo: dividerView.leadingAnchor, constant: -8),
+            collectionView.topAnchor.constraint(equalTo: topAnchor),
+            collectionView.bottomAnchor.constraint(equalTo: bottomAnchor),
             dividerView.trailingAnchor.constraint(equalTo: expandButton.leadingAnchor),
             dividerView.centerYAnchor.constraint(equalTo: centerYAnchor),
             dividerView.widthAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
@@ -103,18 +169,7 @@ final class CandidateBarView: UIView, UIScrollViewDelegate {
             expandButton.widthAnchor.constraint(
                 equalToConstant: Self.expandButtonLeadingInset + Self.expandButtonContentWidth
             ),
-            expandButton.heightAnchor.constraint(equalTo: heightAnchor),
-            stackView.leadingAnchor.constraint(
-                equalTo: scrollView.contentLayoutGuide.leadingAnchor,
-                constant: Self.contentInset
-            ),
-            stackView.trailingAnchor.constraint(
-                equalTo: scrollView.contentLayoutGuide.trailingAnchor,
-                constant: -Self.contentInset
-            ),
-            stackView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
-            stackView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
-            stackView.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor)
+            expandButton.heightAnchor.constraint(equalTo: heightAnchor)
         ])
     }
 
@@ -123,19 +178,15 @@ final class CandidateBarView: UIView, UIScrollViewDelegate {
     }
 
     func update(with candidates: [InputCandidate]) {
+        self.candidates = candidates
         UIView.performWithoutAnimation {
             isAdjustingLayout = true
             defer { isAdjustingLayout = false }
-            for view in stackView.arrangedSubviews {
-                stackView.removeArrangedSubview(view)
-                view.removeFromSuperview()
-            }
-            for candidate in candidates {
-                stackView.addArrangedSubview(makeButton(for: candidate))
-            }
-            scrollView.setContentOffset(.zero, animated: false)
-            stackView.spacing = Self.collapsedSpacing
-            layoutIfNeeded()
+            collectionView.reloadData()
+            collectionView.setContentOffset(.zero, animated: false)
+            flowLayout.minimumInteritemSpacing = Self.collapsedSpacing
+            flowLayout.invalidateLayout()
+            collectionView.layoutIfNeeded()
             updateVisibleCandidateCount()
             if isExpanded {
                 applyExpandedPresentation()
@@ -165,8 +216,8 @@ final class CandidateBarView: UIView, UIScrollViewDelegate {
         )
         expandButton.accessibilityLabel = expanded ? "收合候選字" : "展開候選字"
         dividerView.isHidden = expanded || !hasCandidates
-        scrollView.isScrollEnabled = !expanded
-        scrollView.setContentOffset(.zero, animated: false)
+        collectionView.isScrollEnabled = !expanded
+        collectionView.setContentOffset(.zero, animated: false)
         setExtrasAccessibilityHidden(expanded)
         isTransitioningExpansion = true
         UIView.animate(
@@ -177,9 +228,10 @@ final class CandidateBarView: UIView, UIScrollViewDelegate {
                 if expanded {
                     self.applyExpandedSpacing()
                 } else {
-                    self.stackView.spacing = Self.collapsedSpacing
+                    self.flowLayout.minimumInteritemSpacing = Self.collapsedSpacing
+                    self.flowLayout.invalidateLayout()
                 }
-                self.stackView.layoutIfNeeded()
+                self.collectionView.layoutIfNeeded()
             },
             completion: { [weak self] _ in
                 guard let self else { return }
@@ -200,10 +252,26 @@ final class CandidateBarView: UIView, UIScrollViewDelegate {
             width: max(0, bounds.maxX - dividerView.frame.maxX),
             height: bounds.height
         )
-        if isExpanded, scrollView.contentOffset != .zero {
-            scrollView.setContentOffset(.zero, animated: false)
+        if isExpanded, collectionView.contentOffset != .zero {
+            collectionView.setContentOffset(.zero, animated: false)
         }
         guard !isTransitioningExpansion, !isAdjustingLayout else { return }
+        updateVisibleCandidateCount()
+        if isExpanded {
+            applyExpandedSpacing()
+        }
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        guard previousTraitCollection?.preferredContentSizeCategory
+            != traitCollection.preferredContentSizeCategory
+        else {
+            return
+        }
+        widthCache.removeAll()
+        flowLayout.invalidateLayout()
+        layoutIfNeeded()
         updateVisibleCandidateCount()
         if isExpanded {
             applyExpandedSpacing()
@@ -227,21 +295,63 @@ final class CandidateBarView: UIView, UIScrollViewDelegate {
         return expandButton
     }
 
+    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+        candidates.count
+    }
+
+    func collectionView(
+        _ collectionView: UICollectionView,
+        cellForItemAt indexPath: IndexPath
+    ) -> UICollectionViewCell {
+        let cell = collectionView.dequeueReusableCell(
+            withReuseIdentifier: CandidateCell.reuseIdentifier,
+            for: indexPath
+        )
+        guard let candidateCell = cell as? CandidateCell else { return cell }
+        candidateCell.configure(
+            with: candidates[indexPath.item],
+            adjustsTitleToFit: false
+        ) { [weak self] selected in
+            self?.onSelect?(selected)
+        }
+        return candidateCell
+    }
+
+    func collectionView(
+        _ collectionView: UICollectionView,
+        layout collectionViewLayout: UICollectionViewLayout,
+        sizeForItemAt indexPath: IndexPath
+    ) -> CGSize {
+        CGSize(
+            width: itemWidth(for: candidates[indexPath.item].text),
+            height: max(collectionView.bounds.height, CandidateMetrics.itemHeight)
+        )
+    }
+
     private func toggleExpansion() {
         KeyHaptics.keyDown()
         onToggleExpansion?()
     }
 
+    private func itemWidth(for text: String) -> CGFloat {
+        if let cached = widthCache[text] {
+            return cached
+        }
+        let width = CandidateMetrics.itemWidth(text)
+        widthCache[text] = width
+        return width
+    }
+
     private func updateVisibleCandidateCount() {
-        stackView.layoutIfNeeded()
-        let visibleWidth = scrollView.bounds.width - Self.contentInset
-        var offset: CGFloat = 0
+        collectionView.layoutIfNeeded()
+        let visibleWidth = collectionView.bounds.width - Self.contentInset
         var count = 0
-        for view in stackView.arrangedSubviews {
-            let maxX = offset + view.bounds.width
-            guard maxX <= visibleWidth + 0.5 else { break }
+        for index in 0..<candidates.count {
+            guard let attributes = collectionView.layoutAttributesForItem(
+                at: IndexPath(item: index, section: 0)
+            ) else { break }
+            guard attributes.frame.maxX - Self.contentInset <= visibleWidth + 0.5 else { break }
             count += 1
-            offset = maxX + Self.collapsedSpacing
         }
         guard count != visibleCandidateCount else { return }
         visibleCandidateCount = count
@@ -251,68 +361,52 @@ final class CandidateBarView: UIView, UIScrollViewDelegate {
     private func applyExpandedPresentation() {
         applyExpandedSpacing()
         setExtrasAccessibilityHidden(true)
-        stackView.layoutIfNeeded()
+        collectionView.layoutIfNeeded()
         layoutIfNeeded()
     }
 
     private func applyExpandedSpacing() {
         let spacing = computedExpandedSpacing()
-        guard stackView.spacing != spacing else { return }
-        stackView.spacing = spacing
+        guard flowLayout.minimumInteritemSpacing != spacing else { return }
+        flowLayout.minimumInteritemSpacing = spacing
+        flowLayout.invalidateLayout()
     }
 
     private func computedExpandedSpacing() -> CGFloat {
         let count = visibleCandidateCount
         guard count > 0 else { return Self.collapsedSpacing }
-        let contentWidth = stackView.arrangedSubviews.prefix(count)
-            .reduce(CGFloat.zero) { $0 + $1.bounds.width }
-        let availableWidth = scrollView.bounds.width - 2 * Self.contentInset
+        var contentWidth: CGFloat = 0
+        for index in 0..<count {
+            guard let attributes = collectionView.layoutAttributesForItem(
+                at: IndexPath(item: index, section: 0)
+            ) else { break }
+            contentWidth += attributes.frame.width
+        }
+        let availableWidth = collectionView.bounds.width - 2 * Self.contentInset
         let spacing = (availableWidth - contentWidth) / CGFloat(max(1, count - 1))
         return max(Self.collapsedSpacing, spacing)
     }
 
     private func setExtrasAccessibilityHidden(_ hidden: Bool) {
-        for view in stackView.arrangedSubviews.dropFirst(visibleCandidateCount) {
-            view.accessibilityElementsHidden = hidden
-        }
-    }
-
-    private func makeButton(for candidate: InputCandidate) -> CandidateButton {
-        CandidateButton.make(for: candidate) { [weak self] selected in
-            self?.onSelect?(selected)
+        for cell in collectionView.visibleCells {
+            guard let indexPath = collectionView.indexPath(for: cell) else { continue }
+            cell.accessibilityElementsHidden = hidden && indexPath.item >= visibleCandidateCount
         }
     }
 }
 
 final class CandidateButton: UIButton {
-    static func make(
-        for candidate: InputCandidate,
-        contentInsets: UIEdgeInsets = UIEdgeInsets(top: 2, left: 10, bottom: 2, right: 10),
-        adjustsTitleToFit: Bool = false,
-        onSelect: @escaping (InputCandidate) -> Void
-    ) -> CandidateButton {
-        let button = CandidateButton(type: .custom)
-        button.configuration = nil
-        button.setTitle(candidate.text, for: .normal)
-        button.setTitleColor(.label, for: .normal)
-        button.contentEdgeInsets = contentInsets
-        button.titleLabel?.font = .preferredFont(forTextStyle: .title3)
-        button.titleLabel?.adjustsFontForContentSizeCategory = true
-        if adjustsTitleToFit {
-            button.titleLabel?.adjustsFontSizeToFitWidth = true
-            button.titleLabel?.minimumScaleFactor = 0.6
-            button.titleLabel?.lineBreakMode = .byClipping
-        }
-        button.accessibilityIdentifier = candidate.id.accessibilityIdentifier
-        button.accessibilityLabel = candidate.text
-        button.addAction(
-            UIAction { _ in
-                KeyHaptics.keyDown()
-                onSelect(candidate)
-            },
-            for: .touchUpInside
-        )
-        return button
+    func update(with candidate: InputCandidate, adjustsTitleToFit: Bool) {
+        configuration = nil
+        setTitle(candidate.text, for: .normal)
+        setTitleColor(.label, for: .normal)
+        titleLabel?.font = .preferredFont(forTextStyle: .title3)
+        titleLabel?.adjustsFontForContentSizeCategory = true
+        titleLabel?.adjustsFontSizeToFitWidth = adjustsTitleToFit
+        titleLabel?.minimumScaleFactor = adjustsTitleToFit ? 0.6 : 1
+        titleLabel?.lineBreakMode = .byClipping
+        accessibilityIdentifier = candidate.id.accessibilityIdentifier
+        accessibilityLabel = candidate.text
     }
 
     override var isHighlighted: Bool {
@@ -321,6 +415,7 @@ final class CandidateButton: UIButton {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        contentEdgeInsets = CandidateMetrics.contentInsets
         layer.cornerRadius = 10
         layer.cornerCurve = .continuous
         clipsToBounds = true

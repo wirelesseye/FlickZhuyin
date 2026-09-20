@@ -76,6 +76,9 @@
 		A10000000000000000000043 /* ExpandedCandidateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000020 /* ExpandedCandidateView.swift */; };
 		A10000000000000000000044 /* KeyboardSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000021 /* KeyboardSettings.swift */; };
 		A10000000000000000000045 /* KeyboardSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000021 /* KeyboardSettings.swift */; };
+		A10000000000000000000046 /* KeyboardButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000004 /* KeyboardButton.swift */; };
+		A10000000000000000000047 /* CandidateBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001D /* CandidateBarView.swift */; };
+		A10000000000000000000048 /* ExpandedCandidateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000020 /* ExpandedCandidateView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -522,6 +525,9 @@
 				A10000000000000000000040 /* ChineseInputCoordinator.swift in Sources */,
 				A10000000000000000000041 /* KeyboardDocumentClient.swift in Sources */,
 				A10000000000000000000042 /* InlineCompositionTests.swift in Sources */,
+				A10000000000000000000046 /* KeyboardButton.swift in Sources */,
+				A10000000000000000000047 /* CandidateBarView.swift in Sources */,
+				A10000000000000000000048 /* ExpandedCandidateView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

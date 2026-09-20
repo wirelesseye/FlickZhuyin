@@ -535,6 +535,77 @@ final class ChineseInputPipelineTests: ChineseInputTestCase {
         XCTAssertEqual(fallback.pronunciation, [SyllableConstraint(base: "ㄧ")])
     }
 
+    func testPipelineAppendsRemainingExactSingleCharacterCandidatesBeyondLimit() async throws {
+        let constraint = SyllableConstraint(base: "ㄓㄨ")
+        let texts = ["珠", "朱", "豬", "諸", "株", "茱", "硃", "蛛", "銖", "誅", "邾", "瀦"]
+        let responses: [[SyllableConstraint]: [LexiconMatch]] = [
+            [constraint]: texts.enumerated().map { index, text in
+                LexiconMatch(
+                    text: text,
+                    pronunciation: [CanonicalSyllable(base: "ㄓㄨ", tone: .first)],
+                    sourceWeight: 1.0 - Double(index) * 0.05
+                )
+            }
+        ]
+        let pipeline = try LexiconChineseInputPipeline(
+            store: StubLexiconStore(inventory: ["ㄓㄨ"], responses: responses)
+        )
+        let candidates = try await pipeline.candidates(for: [.symbol("ㄓ"), .symbol("ㄨ")])
+        XCTAssertEqual(candidates.count, texts.count + 1)
+        XCTAssertTrue(candidates.contains { $0.isRawFallback && $0.text == "ㄓㄨ" })
+        XCTAssertEqual(candidates.suffix(texts.count - 9).map(\.text), Array(texts.suffix(3)))
+        XCTAssertEqual(candidates.prefix(9).map(\.text), Array(texts.prefix(9)))
+        XCTAssertEqual(Set(candidates.map(\.id)).count, candidates.count)
+    }
+
+    func testPipelineAppendsEveryRemainingExactSingleCharacterCandidate() async throws {
+        let store = try SQLiteLexiconStore(url: productionDatabaseURL)
+        let pipeline = try LexiconChineseInputPipeline(store: store)
+        let constraint = SyllableConstraint(base: "ㄕ", tone: .fourth)
+        let candidates = try await pipeline.candidates(for: [.symbol("ㄕ"), .tone(.fourth)])
+        let expected = Set(
+            try store.exactMatches(for: [constraint])
+                .filter { $0.text.count == 1 }
+                .map(\.text)
+        )
+        XCTAssertGreaterThan(candidates.count, Decoder().configuration.maximumCandidates)
+        let fallbackIndex = try XCTUnwrap(candidates.firstIndex(where: \.isRawFallback))
+        let appended = candidates[(fallbackIndex + 1)...]
+        XCTAssertFalse(appended.isEmpty)
+        XCTAssertTrue(appended.allSatisfy { !$0.isRawFallback && $0.text.count == 1 })
+        XCTAssertTrue(appended.allSatisfy { $0.pronunciation == [constraint] })
+        XCTAssertEqual(appended.map(\.score), appended.map(\.score).sorted())
+        let leadingTexts = Set(candidates[..<fallbackIndex].map(\.text))
+        XCTAssertEqual(Set(appended.map(\.text)), expected.subtracting(leadingTexts))
+        XCTAssertEqual(Set(candidates.map(\.id)).count, candidates.count)
+    }
+
+    func testPipelineAppendsExactSingleCharactersAcrossTonesWhenToneOmitted() async throws {
+        let store = try SQLiteLexiconStore(url: productionDatabaseURL)
+        let pipeline = try LexiconChineseInputPipeline(store: store)
+        let constraint = SyllableConstraint(base: "ㄧ")
+        let candidates = try await pipeline.candidates(for: [.symbol("ㄧ")])
+        let expected = Set(
+            try store.exactMatches(for: [constraint])
+                .filter { $0.text.count == 1 }
+                .map(\.text)
+        )
+        XCTAssertTrue(expected.isSubset(of: Set(candidates.map(\.text))))
+        XCTAssertGreaterThanOrEqual(candidates.count, expected.count)
+        let fallbackIndex = try XCTUnwrap(candidates.firstIndex(where: \.isRawFallback))
+        XCTAssertEqual(Set(candidates[(fallbackIndex + 1)...].map(\.text)).count, candidates[(fallbackIndex + 1)...].count)
+    }
+
+    func testPipelineDoesNotAppendSingleCharactersForMultipleSyllables() async throws {
+        let pipeline = try LexiconChineseInputPipeline(
+            store: try SQLiteLexiconStore(url: productionDatabaseURL)
+        )
+        let candidates = try await pipeline.candidates(
+            for: [.symbol("ㄓ"), .symbol("ㄨ"), .symbol("ㄧ"), .symbol("ㄣ")]
+        )
+        XCTAssertLessThanOrEqual(candidates.count, Decoder().configuration.maximumCandidates)
+    }
+
     func testMergedCandidateKeepsLowestScore() async throws {
         let yi = SyllableConstraint(base: "ㄧ")
         let store = StubLexiconStore(
@@ -870,5 +941,135 @@ private final class FakeKeyboardDocumentClient: KeyboardDocumentClient {
 
     func moveCursor(by offset: Int) {
         events.append(.moveCursor(offset))
+    }
+}
+
+@MainActor
+final class CandidateViewLayoutTests: XCTestCase {
+    private func makeCandidates(_ count: Int) -> [InputCandidate] {
+        let constraint = SyllableConstraint(base: "ㄏㄡ", tone: .fourth)
+        return (0..<count).map { index in
+            let text = "候選\(index)"
+            return InputCandidate(
+                id: CandidateID(text: text, pronunciation: [constraint], tokenRange: 0..<2),
+                text: text,
+                pronunciation: [constraint],
+                score: Double(index),
+                isRawFallback: false
+            )
+        }
+    }
+
+    private func makeWindow() -> UIWindow {
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 320))
+        window.rootViewController = UIViewController()
+        window.isHidden = false
+        return window
+    }
+
+    private func collectionView(in view: UIView) -> UICollectionView? {
+        view.subviews.compactMap { $0 as? UICollectionView }.first
+    }
+
+    func testCandidateBarRendersOnlyVisibleCells() throws {
+        let window = makeWindow()
+        let bar = CandidateBarView(frame: CGRect(x: 0, y: 0, width: 390, height: 40))
+        window.addSubview(bar)
+        bar.update(with: makeCandidates(800))
+        bar.layoutIfNeeded()
+        let collectionView = try XCTUnwrap(collectionView(in: bar))
+        XCTAssertGreaterThan(bar.visibleCandidateCount, 0)
+        XCTAssertLessThan(collectionView.visibleCells.count, 800)
+        XCTAssertLessThanOrEqual(collectionView.visibleCells.count, 40)
+    }
+
+    func testCandidateBarCountsEveryCandidateThatFits() {
+        let window = makeWindow()
+        let bar = CandidateBarView(frame: CGRect(x: 0, y: 0, width: 390, height: 40))
+        window.addSubview(bar)
+        bar.update(with: makeCandidates(3))
+        bar.layoutIfNeeded()
+        XCTAssertEqual(bar.visibleCandidateCount, 3)
+    }
+
+    func testCandidateBarExpansionKeepsFirstRowCount() throws {
+        let window = makeWindow()
+        let bar = CandidateBarView(frame: CGRect(x: 0, y: 0, width: 390, height: 40))
+        window.addSubview(bar)
+        bar.update(with: makeCandidates(800))
+        bar.layoutIfNeeded()
+        let count = bar.visibleCandidateCount
+        bar.setExpanded(true)
+        bar.layoutIfNeeded()
+        XCTAssertTrue(bar.isExpanded)
+        XCTAssertEqual(bar.visibleCandidateCount, count)
+        bar.setExpanded(false)
+        XCTAssertFalse(bar.isExpanded)
+    }
+
+    func testExpandedCandidateViewRendersOnlyVisibleCells() throws {
+        let window = makeWindow()
+        let expanded = ExpandedCandidateView(frame: CGRect(x: 0, y: 0, width: 390, height: 320))
+        window.addSubview(expanded)
+        expanded.update(with: makeCandidates(800))
+        expanded.layoutIfNeeded()
+        let collectionView = try XCTUnwrap(collectionView(in: expanded))
+        XCTAssertGreaterThan(collectionView.visibleCells.count, 0)
+        XCTAssertLessThan(collectionView.visibleCells.count, 100)
+        XCTAssertGreaterThan(collectionView.contentSize.height, 320)
+    }
+
+    func testCandidateBarCellsFitTheirButtons() throws {
+        let window = makeWindow()
+        let bar = CandidateBarView(frame: CGRect(x: 0, y: 0, width: 390, height: 40))
+        window.addSubview(bar)
+        bar.update(with: makeCandidates(20))
+        bar.layoutIfNeeded()
+        let collectionView = try XCTUnwrap(collectionView(in: bar))
+        XCTAssertFalse(collectionView.visibleCells.isEmpty)
+        for cell in collectionView.visibleCells {
+            let button = try XCTUnwrap(
+                cell.contentView.subviews.compactMap { $0 as? CandidateButton }.first
+            )
+            XCTAssertGreaterThanOrEqual(cell.bounds.width, button.intrinsicContentSize.width)
+        }
+    }
+
+    func testScrollableCandidateListsRenderInteractionSurface() throws {
+        let window = makeWindow()
+        let bar = CandidateBarView(frame: CGRect(x: 0, y: 0, width: 390, height: 40))
+        window.addSubview(bar)
+        bar.update(with: makeCandidates(5))
+        let expanded = ExpandedCandidateView(frame: CGRect(x: 0, y: 0, width: 390, height: 320))
+        window.addSubview(expanded)
+        expanded.update(with: makeCandidates(5))
+        bar.layoutIfNeeded()
+        expanded.layoutIfNeeded()
+        let barCollectionView = try XCTUnwrap(collectionView(in: bar))
+        let expandedCollectionView = try XCTUnwrap(collectionView(in: expanded))
+        XCTAssertGreaterThan(barCollectionView.backgroundColor?.cgColor.alpha ?? 0, 0)
+        XCTAssertGreaterThan(expandedCollectionView.backgroundColor?.cgColor.alpha ?? 0, 0)
+    }
+
+    func testExpandedCandidateClampsOversizedTitle() throws {
+        let window = makeWindow()
+        let expanded = ExpandedCandidateView(frame: CGRect(x: 0, y: 0, width: 390, height: 320))
+        window.addSubview(expanded)
+        let constraint = SyllableConstraint(base: "ㄏㄡ", tone: .fourth)
+        let text = String(repeating: "候", count: 40)
+        let candidate = InputCandidate(
+            id: CandidateID(text: text, pronunciation: [constraint], tokenRange: 0..<2),
+            text: text,
+            pronunciation: [constraint],
+            score: 1,
+            isRawFallback: false
+        )
+        expanded.update(with: [candidate])
+        expanded.layoutIfNeeded()
+        let collectionView = try XCTUnwrap(collectionView(in: expanded))
+        let cell = try XCTUnwrap(
+            collectionView.cellForItem(at: IndexPath(item: 0, section: 0))
+        )
+        XCTAssertLessThanOrEqual(cell.bounds.width, 390 - 2 * ExpandedCandidateView.contentInset)
     }
 }

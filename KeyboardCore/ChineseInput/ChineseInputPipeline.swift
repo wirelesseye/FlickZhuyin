@@ -8,6 +8,7 @@ final class LexiconChineseInputPipeline: ChineseInputPipeline, @unchecked Sendab
     private let parser: SyllableParser
     private let matcher: DictionaryMatcher
     private let decoder: Decoder
+    private let store: any LexiconStore
     private let queue = DispatchQueue(
         label: "com.wirelesseye.FlickZhuyin.ChineseInputPipeline",
         qos: .userInitiated
@@ -28,6 +29,7 @@ final class LexiconChineseInputPipeline: ChineseInputPipeline, @unchecked Sendab
     }
 
     init(store: any LexiconStore, decoder: Decoder = Decoder()) throws {
+        self.store = store
         parser = try SyllableParser(store: store)
         matcher = DictionaryMatcher(store: store)
         self.decoder = decoder
@@ -51,15 +53,78 @@ final class LexiconChineseInputPipeline: ChineseInputPipeline, @unchecked Sendab
         let wordLattice = try matcher.buildLattice(from: syllableLattice)
         let decoded = try decoder.decode(syllableLattice: syllableLattice, wordLattice: wordLattice)
         let candidates = Self.mergedByText(decoded.map(InputCandidate.init(decoded:)))
-        guard !candidates.contains(where: \.isRawFallback) else {
-            return candidates
+        var result: [InputCandidate]
+        if candidates.contains(where: \.isRawFallback) {
+            result = candidates
+        } else {
+            let limit = decoder.configuration.maximumCandidates
+            result = Array(candidates.prefix(max(0, limit - 1)))
+            if let fallback = rawFallback(for: tokens, lattice: syllableLattice) {
+                result.append(fallback)
+            }
         }
-        let limit = decoder.configuration.maximumCandidates
-        var limited = Array(candidates.prefix(max(0, limit - 1)))
-        if let fallback = rawFallback(for: tokens, lattice: syllableLattice) {
-            limited.append(fallback)
+        result.append(contentsOf: try exactSingleCharacterCandidates(
+            lattice: syllableLattice,
+            excludingTexts: Set(result.map(\.text))
+        ))
+        return result
+    }
+
+    private func exactSingleCharacterCandidates(
+        lattice: SyllableLattice,
+        excludingTexts excluded: Set<String>
+    ) throws -> [InputCandidate] {
+        let tokenCount = lattice.tokenCount
+        guard tokenCount > 0 else { return [] }
+        let tokenRange = 0..<tokenCount
+        var bestByText: [String: (score: Double, constraint: SyllableConstraint)] = [:]
+        for edge in lattice.outgoingEdges[0]
+        where edge.tokenRange == tokenRange && edge.completeness == .complete {
+            for match in try store.exactMatches(for: [edge.constraint]) {
+                guard match.text.count == 1,
+                      match.pronunciation.count == 1,
+                      let syllable = match.pronunciation.first,
+                      !excluded.contains(match.text)
+                else { continue }
+                let score = try decoder.scorer.cost(
+                    for: WordEdge(
+                        tokenRange: tokenRange,
+                        text: match.text,
+                        pronunciation: match.pronunciation,
+                        sourceWeight: match.sourceWeight,
+                        pronunciationWeight: match.pronunciationWeight,
+                        syllableEdges: [edge]
+                    )
+                )
+                if let existing = bestByText[match.text], existing.score <= score {
+                    continue
+                }
+                bestByText[match.text] = (
+                    score,
+                    SyllableConstraint(base: syllable.base, tone: syllable.tone)
+                )
+            }
         }
-        return limited
+        return bestByText
+            .map { text, entry in
+                InputCandidate(
+                    id: CandidateID(
+                        text: text,
+                        pronunciation: [entry.constraint],
+                        tokenRange: tokenRange
+                    ),
+                    text: text,
+                    pronunciation: [entry.constraint],
+                    score: entry.score,
+                    isRawFallback: false
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.score != rhs.score {
+                    return lhs.score < rhs.score
+                }
+                return lhs.text < rhs.text
+            }
     }
 
     private static func mergedByText(_ candidates: [InputCandidate]) -> [InputCandidate] {

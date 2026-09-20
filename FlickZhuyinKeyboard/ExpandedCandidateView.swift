@@ -1,16 +1,16 @@
 import UIKit
 
-final class ExpandedCandidateView: UIView {
+final class ExpandedCandidateView: UIView, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
     static let contentInset: CGFloat = 4
 
     var onSelect: ((InputCandidate) -> Void)?
 
-    private static let rowHeight: CGFloat = 40
     private static let spacing: CGFloat = 7
 
-    private let scrollView = UIScrollView()
-    private let rowsStack = UIStackView()
+    private let flowLayout = UICollectionViewFlowLayout()
+    private lazy var collectionView = UICollectionView(frame: .zero, collectionViewLayout: flowLayout)
     private var candidates: [InputCandidate] = []
+    private var widthCache: [String: CGFloat] = [:]
     private var lastLayoutWidth: CGFloat = 0
 
     override init(frame: CGRect) {
@@ -18,47 +18,40 @@ final class ExpandedCandidateView: UIView {
         backgroundColor = .clear
         accessibilityIdentifier = "expanded-candidate-list"
 
-        scrollView.showsVerticalScrollIndicator = true
-        scrollView.alwaysBounceVertical = false
-        if #available(iOS 26.0, *) {
-            scrollView.topEdgeEffect.isHidden = true
-            scrollView.leftEdgeEffect.isHidden = true
-            scrollView.bottomEdgeEffect.isHidden = true
-            scrollView.rightEdgeEffect.isHidden = true
-        }
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(scrollView)
+        flowLayout.scrollDirection = .vertical
+        flowLayout.minimumInteritemSpacing = Self.spacing
+        flowLayout.minimumLineSpacing = Self.spacing
+        flowLayout.sectionInset = UIEdgeInsets(
+            top: Self.contentInset,
+            left: Self.contentInset,
+            bottom: Self.contentInset,
+            right: Self.contentInset
+        )
 
-        rowsStack.axis = .vertical
-        rowsStack.spacing = Self.spacing
-        rowsStack.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.addSubview(rowsStack)
+        collectionView.dataSource = self
+        collectionView.delegate = self
+        collectionView.register(
+            CandidateCell.self,
+            forCellWithReuseIdentifier: CandidateCell.reuseIdentifier
+        )
+        collectionView.backgroundColor = KeyboardSurface.interactionColor
+        collectionView.showsVerticalScrollIndicator = true
+        collectionView.alwaysBounceVertical = false
+        collectionView.contentInsetAdjustmentBehavior = .never
+        if #available(iOS 26.0, *) {
+            collectionView.topEdgeEffect.isHidden = true
+            collectionView.leftEdgeEffect.isHidden = true
+            collectionView.bottomEdgeEffect.isHidden = true
+            collectionView.rightEdgeEffect.isHidden = true
+        }
+        collectionView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(collectionView)
 
         NSLayoutConstraint.activate([
-            scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            scrollView.topAnchor.constraint(equalTo: topAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
-            rowsStack.leadingAnchor.constraint(
-                equalTo: scrollView.contentLayoutGuide.leadingAnchor,
-                constant: Self.contentInset
-            ),
-            rowsStack.trailingAnchor.constraint(
-                equalTo: scrollView.contentLayoutGuide.trailingAnchor,
-                constant: -Self.contentInset
-            ),
-            rowsStack.topAnchor.constraint(
-                equalTo: scrollView.contentLayoutGuide.topAnchor,
-                constant: Self.contentInset
-            ),
-            rowsStack.bottomAnchor.constraint(
-                equalTo: scrollView.contentLayoutGuide.bottomAnchor,
-                constant: -Self.contentInset
-            ),
-            rowsStack.widthAnchor.constraint(
-                equalTo: scrollView.frameLayoutGuide.widthAnchor,
-                constant: -2 * Self.contentInset
-            )
+            collectionView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            collectionView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            collectionView.topAnchor.constraint(equalTo: topAnchor),
+            collectionView.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
     }
 
@@ -68,13 +61,14 @@ final class ExpandedCandidateView: UIView {
 
     func update(with candidates: [InputCandidate]) {
         self.candidates = candidates
-        rebuildRows(forWidth: bounds.width)
+        collectionView.reloadData()
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         guard bounds.width > 0, bounds.width != lastLayoutWidth else { return }
-        rebuildRows(forWidth: bounds.width)
+        lastLayoutWidth = bounds.width
+        collectionView.reloadData()
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -84,20 +78,21 @@ final class ExpandedCandidateView: UIView {
         else {
             return
         }
-        rebuildRows(forWidth: bounds.width)
+        widthCache.removeAll()
+        collectionView.reloadData()
     }
 
     func prepareForEntrance() {
-        guard !rowsStack.arrangedSubviews.isEmpty else { return }
-        rowsStack.transform = CGAffineTransform(
+        guard !candidates.isEmpty else { return }
+        collectionView.transform = CGAffineTransform(
             translationX: 0,
-            y: -(Self.rowHeight + Self.spacing)
+            y: -(CandidateMetrics.itemHeight + Self.spacing)
         )
-        rowsStack.alpha = 0
+        collectionView.alpha = 0
     }
 
     func animateEntrance(completion: (() -> Void)? = nil) {
-        guard !rowsStack.arrangedSubviews.isEmpty else {
+        guard !candidates.isEmpty else {
             completion?()
             return
         }
@@ -106,77 +101,67 @@ final class ExpandedCandidateView: UIView {
             delay: 0,
             options: [.curveEaseOut],
             animations: {
-                self.rowsStack.transform = .identity
-                self.rowsStack.alpha = 1
+                self.collectionView.transform = .identity
+                self.collectionView.alpha = 1
             },
             completion: { _ in completion?() }
         )
     }
 
     func resetEntranceState() {
-        rowsStack.layer.removeAllAnimations()
-        rowsStack.transform = .identity
-        rowsStack.alpha = 1
+        collectionView.layer.removeAllAnimations()
+        collectionView.transform = .identity
+        collectionView.alpha = 1
     }
 
-    private func rebuildRows(forWidth width: CGFloat) {
-        lastLayoutWidth = width
-        UIView.performWithoutAnimation {
-            for view in rowsStack.arrangedSubviews {
-                rowsStack.removeArrangedSubview(view)
-                view.removeFromSuperview()
-            }
-            guard width > 0, !candidates.isEmpty else { return }
-            let availableWidth = width - 2 * Self.contentInset
-            var row = makeRow()
-            var rowWidth: CGFloat = 0
-            for candidate in candidates {
-                let button = makeButton(for: candidate, maximumWidth: availableWidth)
-                let buttonWidth = min(button.intrinsicContentSize.width, availableWidth)
-                if rowWidth > 0, rowWidth + Self.spacing + buttonWidth > availableWidth {
-                    appendRow(row)
-                    row = makeRow()
-                    rowWidth = 0
-                }
-                row.addArrangedSubview(button)
-                rowWidth += (rowWidth > 0 ? Self.spacing : 0) + buttonWidth
-            }
-            appendRow(row)
-        }
+    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+        candidates.count
     }
 
-    private func makeRow() -> UIStackView {
-        let row = UIStackView()
-        row.axis = .horizontal
-        row.spacing = Self.spacing
-        row.distribution = .fill
-        row.heightAnchor.constraint(equalToConstant: Self.rowHeight).isActive = true
-        return row
-    }
-
-    private func appendRow(_ row: UIStackView) {
-        if let last = row.arrangedSubviews.last {
-            row.setCustomSpacing(0, after: last)
-        }
-        let spacer = makeSpacer()
-        spacer.setContentHuggingPriority(UILayoutPriority(1), for: .horizontal)
-        row.addArrangedSubview(spacer)
-        rowsStack.addArrangedSubview(row)
-    }
-
-    private func makeButton(for candidate: InputCandidate, maximumWidth: CGFloat) -> CandidateButton {
-        let button = CandidateButton.make(for: candidate, adjustsTitleToFit: true) { [weak self] selected in
+    func collectionView(
+        _ collectionView: UICollectionView,
+        cellForItemAt indexPath: IndexPath
+    ) -> UICollectionViewCell {
+        let cell = collectionView.dequeueReusableCell(
+            withReuseIdentifier: CandidateCell.reuseIdentifier,
+            for: indexPath
+        )
+        guard let candidateCell = cell as? CandidateCell else { return cell }
+        let candidate = candidates[indexPath.item]
+        candidateCell.configure(
+            with: candidate,
+            adjustsTitleToFit: isOversized(candidate.text)
+        ) { [weak self] selected in
             self?.onSelect?(selected)
         }
-        button.widthAnchor.constraint(lessThanOrEqualToConstant: maximumWidth).isActive = true
-        return button
+        return candidateCell
     }
 
-    private func makeSpacer() -> UIView {
-        let spacer = UIView()
-        spacer.isUserInteractionEnabled = false
-        spacer.backgroundColor = .clear
-        spacer.accessibilityElementsHidden = true
-        return spacer
+    func collectionView(
+        _ collectionView: UICollectionView,
+        layout collectionViewLayout: UICollectionViewLayout,
+        sizeForItemAt indexPath: IndexPath
+    ) -> CGSize {
+        CGSize(
+            width: min(itemWidth(for: candidates[indexPath.item].text), availableWidth),
+            height: CandidateMetrics.itemHeight
+        )
+    }
+
+    private var availableWidth: CGFloat {
+        max(collectionView.bounds.width - 2 * Self.contentInset, 1)
+    }
+
+    private func isOversized(_ text: String) -> Bool {
+        itemWidth(for: text) > availableWidth
+    }
+
+    private func itemWidth(for text: String) -> CGFloat {
+        if let cached = widthCache[text] {
+            return cached
+        }
+        let width = CandidateMetrics.itemWidth(text)
+        widthCache[text] = width
+        return width
     }
 }
