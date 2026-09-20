@@ -452,6 +452,17 @@ final class ChineseInputPipelineTests: ChineseInputTestCase {
         XCTAssertTrue(candidates.prefix(3).contains { $0.text == "知道" })
     }
 
+    func testProductionWuShiDoesNotLeadWithZeroWeightComposition() async throws {
+        let pipeline = try LexiconChineseInputPipeline(
+            store: try SQLiteLexiconStore(url: productionDatabaseURL)
+        )
+        let wuShi = try await pipeline.candidates(for: [.symbol("ㄨ"), .symbol("ㄕ")])
+        XCTAssertFalse(wuShi.isEmpty)
+        XCTAssertNotEqual(wuShi.first?.text, "於是")
+        let yuShi = try await pipeline.candidates(for: [.symbol("ㄩ"), .symbol("ㄕ")])
+        XCTAssertTrue(yuShi.prefix(3).contains { $0.text == "於是" })
+    }
+
     func testProductionKeYiKanCombinesVowelAndInitials() async throws {
         let pipeline = try LexiconChineseInputPipeline(
             store: try SQLiteLexiconStore(url: productionDatabaseURL)

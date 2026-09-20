@@ -1,6 +1,6 @@
 {
   "sourceEntries": 99329,
-  "compiledEntries": 810303,
+  "compiledEntries": 750937,
   "terraCompiledEntries": 99328,
   "duplicateEntries": 1,
   "duplicateEssayEntries": 3,
@@ -13,25 +13,26 @@
   "essayComposedEntries": 372289,
   "essayUnannotatedEntries": 40,
   "essayOversizedEntries": 1,
-  "essayTruncatedEntries": 1497,
-  "generatedPronunciations": 786968,
+  "essayTruncatedEntries": 821,
+  "generatedPronunciations": 727602,
+  "excludedZeroWeightReadings": 36458,
   "distinctWords": 463351,
   "distinctPinyinSyllables": 421,
   "distinctZhuyinSyllables": 419,
-  "distinctInitialKeys": 134207,
+  "distinctInitialKeys": 130474,
   "initialKeyIntegrity": {
-    "checkedEntries": 810303,
+    "checkedEntries": 750937,
     "syllableCountMismatches": 0
   },
   "maxSyllableCount": 16,
-  "weightedEntries": 786968,
-  "essayWeightedEntries": 786968,
+  "weightedEntries": 727602,
+  "essayWeightedEntries": 727602,
   "normalization": {
     "formula": "log1p(frequency)/log1p(max_frequency)",
     "maximumFrequency": 4822928
   },
   "database": {
-    "bytes": 174264320,
+    "bytes": 160256000,
     "limitBytes": 268435456
   },
   "errors": [],
@@ -80,32 +81,8 @@
   ],
   "truncatedExamples": [
     {
-      "text": "一一映射",
-      "essaySourceLine": 162,
-      "retained": 16,
-      "limit": 16
-    },
-    {
-      "text": "一一比對",
-      "essaySourceLine": 163,
-      "retained": 16,
-      "limit": 16
-    },
-    {
-      "text": "一上一下",
-      "essaySourceLine": 176,
-      "retained": 16,
-      "limit": 16
-    },
-    {
       "text": "一不一樣",
       "essaySourceLine": 209,
-      "retained": 16,
-      "limit": 16
-    },
-    {
-      "text": "一人一邊",
-      "essaySourceLine": 330,
       "retained": 16,
       "limit": 16
     },
@@ -122,8 +99,32 @@
       "limit": 16
     },
     {
-      "text": "一個一個",
-      "essaySourceLine": 438,
+      "text": "一個女的",
+      "essaySourceLine": 517,
+      "retained": 16,
+      "limit": 16
+    },
+    {
+      "text": "一個好的",
+      "essaySourceLine": 520,
+      "retained": 16,
+      "limit": 16
+    },
+    {
+      "text": "一個蘿蔔一個坑兒",
+      "essaySourceLine": 636,
+      "retained": 16,
+      "limit": 16
+    },
+    {
+      "text": "一個都不能少",
+      "essaySourceLine": 653,
+      "retained": 16,
+      "limit": 16
+    },
+    {
+      "text": "一個饅頭也得蒸熟喫",
+      "essaySourceLine": 672,
       "retained": 16,
       "limit": 16
     }
@@ -156,6 +157,6 @@
       "frequencyMax": 4822928
     }
   },
-  "compilerVersion": "3",
+  "compilerVersion": "4",
   "schemaVersion": 3
 }

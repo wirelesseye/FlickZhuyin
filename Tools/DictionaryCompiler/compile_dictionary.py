@@ -22,7 +22,7 @@ ESSAY_REPOSITORY = "https://github.com/rime/rime-essay"
 ESSAY_RAW_BASE_URL = "https://raw.githubusercontent.com/rime/rime-essay"
 ESSAY_PATH = "essay.txt"
 ESSAY_FORMAT_VERSION = 1
-COMPILER_VERSION = "3"
+COMPILER_VERSION = "4"
 SCHEMA_VERSION = 3
 REQUIRED_HEADER_KEYS = ("name", "version")
 REQUIRED_METADATA_KEYS = (
@@ -182,6 +182,7 @@ class EssayAnnotation:
     oversized_entries: int
     truncated_entries: int
     generated_pronunciations: int
+    excluded_zero_weight_readings: int
     unannotated_examples: tuple[dict, ...]
     truncated_examples: tuple[dict, ...]
     oversized_examples: tuple[dict, ...]
@@ -462,6 +463,20 @@ def merge_essay_entries(entries: tuple[EssayEntry, ...]) -> tuple[list[EssayEntr
     return list(merged.values()), duplicates
 
 
+def readings_for_composition(readings: tuple[TerraReading, ...]) -> tuple[TerraReading, ...]:
+    has_positive_weight = any(
+        reading.source_weight is not None and reading.source_weight > 0.0
+        for reading in readings
+    )
+    if not has_positive_weight:
+        return readings
+    return tuple(
+        reading
+        for reading in readings
+        if reading.source_weight is None or reading.source_weight > 0.0
+    )
+
+
 def compose_readings(
     reading_lists: list[tuple[TerraReading, ...]],
     limit: int,
@@ -519,6 +534,7 @@ def annotate_essay(entries: list[EssayEntry], index: TerraIndex) -> EssayAnnotat
     oversized_entries = 0
     truncated_entries = 0
     generated_pronunciations = 0
+    excluded_zero_weight_readings = 0
     unannotated_examples: list[dict] = []
     truncated_examples: list[dict] = []
     oversized_examples: list[dict] = []
@@ -554,7 +570,12 @@ def annotate_essay(entries: list[EssayEntry], index: TerraIndex) -> EssayAnnotat
                         }
                     )
                 continue
-            reading_lists = [index.characters[character] for character in entry.text]
+            reading_lists = []
+            for character in entry.text:
+                character_readings = index.characters[character]
+                composed_readings = readings_for_composition(character_readings)
+                excluded_zero_weight_readings += len(character_readings) - len(composed_readings)
+                reading_lists.append(composed_readings)
             combinations = math.prod(len(readings) for readings in reading_lists)
             truncated = combinations > MAXIMUM_PRONUNCIATIONS_PER_WORD
             readings = compose_readings(reading_lists, MAXIMUM_PRONUNCIATIONS_PER_WORD + 1)
@@ -586,6 +607,7 @@ def annotate_essay(entries: list[EssayEntry], index: TerraIndex) -> EssayAnnotat
         oversized_entries=oversized_entries,
         truncated_entries=truncated_entries,
         generated_pronunciations=generated_pronunciations,
+        excluded_zero_weight_readings=excluded_zero_weight_readings,
         unannotated_examples=tuple(unannotated_examples),
         truncated_examples=tuple(truncated_examples),
         oversized_examples=tuple(oversized_examples),
@@ -949,6 +971,7 @@ def build_database(
         "essayOversizedEntries": annotation.oversized_entries,
         "essayTruncatedEntries": annotation.truncated_entries,
         "generatedPronunciations": annotation.generated_pronunciations,
+        "excludedZeroWeightReadings": annotation.excluded_zero_weight_readings,
         "distinctWords": len({row.text for row in rows}),
         "distinctPinyinSyllables": len(distinct_pinyin),
         "distinctZhuyinSyllables": len(inventory),

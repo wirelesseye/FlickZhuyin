@@ -11,10 +11,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from compile_dictionary import (  # noqa: E402
     CompileFailure,
     build_database,
+    compile_terra_entries,
     main,
     normalize_frequency,
     parse_dictionary,
     parse_essay,
+    readings_for_composition,
 )
 from pinyin_to_zhuyin import convert_syllable  # noqa: E402
 
@@ -116,10 +118,10 @@ class CompilerTestCase(unittest.TestCase):
             )
         return str(context.exception)
 
-    def query(self, database, sql):
+    def query(self, database, sql, parameters=()):
         connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
         try:
-            return connection.execute(sql).fetchall()
+            return connection.execute(sql, parameters).fetchall()
         finally:
             connection.close()
 
@@ -381,6 +383,52 @@ class AnnotationTests(CompilerTestCase):
         self.assertEqual(report["essayComposedEntries"], 1)
         self.assertEqual(report["generatedPronunciations"], 1)
 
+    def test_zero_weight_character_readings_are_excluded_from_composition(self):
+        body = "於\twu1\t0%\n於\tyu2\t100%\n是\tshi4\n"
+        output, report = self.build(body, essay_body="於是\t100\n")
+        rows = self.query(
+            output,
+            "SELECT base_key, tone_key, source_kind, terra_source_lines, essay_source_line, raw_frequency "
+            "FROM pronunciation WHERE text = '於是'",
+        )
+        self.assertEqual(
+            rows,
+            [(SEPARATOR.join(["ㄩ", "ㄕ"]), "24", "essay", "[8,9]", 1, 100)],
+        )
+        self.assertEqual(report["excludedZeroWeightReadings"], 1)
+        self.assertEqual(report["generatedPronunciations"], 1)
+
+    def test_unweighted_readings_are_kept_with_positive_readings(self):
+        body = "中\tzhong1\t50%\n中\tzhong4\n"
+        output, report = self.build(body, essay_body="中中\t100\n")
+        rows = self.query(output, "SELECT tone_key FROM pronunciation WHERE text = '中中' ORDER BY tone_key")
+        self.assertEqual([row[0] for row in rows], ["11", "14", "41", "44"])
+        self.assertEqual(report["excludedZeroWeightReadings"], 0)
+
+    def test_all_zero_weight_readings_fall_back_to_composition(self):
+        body = "甲\tjia3\t0%\n乙\tyi3\t0%\n"
+        output, report = self.build(body, essay_body="甲乙\t100\n")
+        rows = self.query(
+            output,
+            "SELECT base_key, tone_key FROM pronunciation WHERE text = '甲乙'",
+        )
+        self.assertEqual(rows, [(SEPARATOR.join(["ㄐㄧㄚ", "ㄧ"]), "33")])
+        self.assertEqual(report["excludedZeroWeightReadings"], 0)
+
+    def test_zero_weight_single_character_readings_are_retained(self):
+        body = "於\twu1\t0%\n於\tyu2\t100%\n"
+        output, report = self.build(body, essay_body="於\t100\n")
+        rows = self.query(
+            output,
+            "SELECT base_key, tone_key, source_kind FROM pronunciation "
+            "WHERE text = '於' ORDER BY base_key",
+        )
+        self.assertEqual(
+            rows,
+            [("ㄨ", "1", "terra+essay"), ("ㄩ", "2", "terra+essay")],
+        )
+        self.assertEqual(report["excludedZeroWeightReadings"], 0)
+
     def test_polyphone_generates_multiple_pronunciations(self):
         body = "中\tzhong1\t50%\n中\tzhong4\t30%\n"
         output, report = self.build(body, essay_body="中中\t100\n")
@@ -542,13 +590,13 @@ class CompilationTests(CompilerTestCase):
         self.assertEqual(metadata["essay_source_sha256"], report["sources"]["essay"]["sha256"])
         self.assertEqual(metadata["entry_count"], str(report["compiledEntries"]))
         self.assertEqual(metadata["dictionary_version"], "1.0")
-        self.assertEqual(metadata["compiler_version"], "3")
+        self.assertEqual(metadata["compiler_version"], "4")
         self.assertEqual(metadata["essay_entry_count"], "1")
         self.assertEqual(metadata["essay_annotated_entry_count"], "1")
         self.assertEqual(metadata["essay_frequency_max"], "100")
         self.assertEqual(metadata["weight_normalization"], "log1p(frequency)/log1p(max_frequency)")
         self.assertEqual(report["schemaVersion"], 3)
-        self.assertEqual(report["compilerVersion"], "3")
+        self.assertEqual(report["compilerVersion"], "4")
         inventory = [row[0] for row in self.query(output, "SELECT base FROM syllable_inventory ORDER BY base")]
         self.assertEqual(inventory, sorted({"ㄓㄨㄥ", "ㄨㄣ"}))
         self.assertEqual(self.query(output, "PRAGMA user_version")[0][0], 3)
@@ -679,6 +727,7 @@ class ProductionDictionaryTests(CompilerTestCase):
         self.assertEqual(report["errors"], [])
         self.assertEqual(report["essayEntries"], len(parsed_essay.entries))
         self.assertGreater(report["essayAnnotatedEntries"], 400_000)
+        self.assertGreater(report["excludedZeroWeightReadings"], 0)
         self.assertGreaterEqual(report["distinctZhuyinSyllables"], len(inventory))
         self.assertLessEqual(report["database"]["bytes"], report["database"]["limitBytes"])
 
@@ -710,7 +759,7 @@ class ProductionDictionaryTests(CompilerTestCase):
         essay_manifest = json.loads(PRODUCTION_ESSAY_MANIFEST.read_text(encoding="utf-8"))
         metadata = dict(self.query(PRODUCTION_DATABASE, "SELECT key, value FROM metadata"))
         self.assertEqual(metadata["schema_version"], "3")
-        self.assertEqual(metadata["compiler_version"], "3")
+        self.assertEqual(metadata["compiler_version"], "4")
         self.assertEqual(metadata["terra_source_repository"], terra_manifest["repository"])
         self.assertEqual(metadata["terra_source_commit"], terra_manifest["commit"])
         self.assertEqual(metadata["terra_source_sha256"], terra_manifest["sha256"])
@@ -721,6 +770,62 @@ class ProductionDictionaryTests(CompilerTestCase):
         self.assertEqual(metadata["essay_frequency_max"], str(essay_manifest["frequencyMax"]))
         self.assertEqual(metadata["weight_normalization"], "log1p(frequency)/log1p(max_frequency)")
         self.assertEqual(self.query(PRODUCTION_DATABASE, "PRAGMA integrity_check")[0][0], "ok")
+
+    def test_zero_weight_character_readings_are_not_composed(self):
+        composed = self.query(
+            PRODUCTION_DATABASE,
+            "SELECT base_key, tone_key FROM pronunciation WHERE text = '於是'",
+        )
+        self.assertEqual(composed, [(SEPARATOR.join(["ㄩ", "ㄕ"]), "24")])
+        wrong = self.query(
+            PRODUCTION_DATABASE,
+            "SELECT COUNT(*) FROM pronunciation WHERE text = '於是' AND base_key = ?",
+            (SEPARATOR.join(["ㄨ", "ㄕ"]),),
+        )
+        self.assertEqual(wrong[0][0], 0)
+
+    def test_zero_weight_single_character_readings_are_retained(self):
+        rows = self.query(
+            PRODUCTION_DATABASE,
+            "SELECT tone_key FROM pronunciation WHERE text = '於' AND base_key = ? ORDER BY tone_key",
+            ("ㄨ",),
+        )
+        self.assertEqual([row[0] for row in rows], ["1"])
+        retained = self.query(
+            PRODUCTION_DATABASE,
+            "SELECT COUNT(*) FROM pronunciation WHERE base_key = ?",
+            ("ㄨ",),
+        )
+        self.assertGreater(retained[0][0], 0)
+
+    def test_composed_readings_never_reference_zero_weight_alternatives(self):
+        parsed_terra = parse_dictionary(PRODUCTION_TERRA_SOURCE)
+        terra_rows, errors, _, _, _ = compile_terra_entries(parsed_terra.entries, PRODUCTION_TERRA_SOURCE)
+        self.assertEqual(errors, [])
+        rows_by_line = {row.source_line: row for row in terra_rows}
+        positive_characters = {
+            row.text
+            for row in terra_rows
+            if len(row.text) == 1 and row.source_weight is not None and row.source_weight > 0.0
+        }
+        self.assertGreater(len(positive_characters), 0)
+        composed = self.query(
+            PRODUCTION_DATABASE,
+            "SELECT text, terra_source_lines FROM pronunciation WHERE source_kind = 'essay'",
+        )
+        self.assertFalse(composed == [])
+        violations = []
+        for text, lines_json in composed:
+            for line in json.loads(lines_json):
+                row = rows_by_line[line]
+                if (
+                    len(row.text) == 1
+                    and row.source_weight == 0.0
+                    and row.text in positive_characters
+                ):
+                    violations.append((text, row.text, line))
+                    break
+        self.assertEqual(violations[:8], [])
 
     def test_representative_words_are_weighted(self):
         zhuyin = self.query(

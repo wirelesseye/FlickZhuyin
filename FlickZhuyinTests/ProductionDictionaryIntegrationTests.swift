@@ -32,7 +32,7 @@ final class ProductionDictionaryIntegrationTests: XCTestCase {
         let report = try readJSON(reportURL)
 
         XCTAssertEqual(metadata["schema_version"], "3")
-        XCTAssertEqual(metadata["compiler_version"], "3")
+        XCTAssertEqual(metadata["compiler_version"], "4")
         XCTAssertEqual(metadata["terra_source_repository"], terraManifest["repository"] as? String)
         XCTAssertEqual(metadata["terra_source_commit"], terraManifest["commit"] as? String)
         XCTAssertEqual(metadata["terra_source_sha256"], terraManifest["sha256"] as? String)
@@ -44,6 +44,7 @@ final class ProductionDictionaryIntegrationTests: XCTestCase {
         XCTAssertEqual(metadata["weight_normalization"], "log1p(frequency)/log1p(max_frequency)")
         XCTAssertEqual(metadata["compiler_version"], report["compilerVersion"] as? String)
 
+        XCTAssertGreaterThan(try XCTUnwrap(report["excludedZeroWeightReadings"] as? Int), 0)
         let compiledEntries = try XCTUnwrap(report["compiledEntries"] as? Int)
         XCTAssertEqual(Int(metadata["entry_count"] ?? ""), compiledEntries)
         XCTAssertEqual(Int(metadata["max_syllable_count"] ?? ""), try XCTUnwrap(report["maxSyllableCount"] as? Int))
@@ -86,6 +87,24 @@ final class ProductionDictionaryIntegrationTests: XCTestCase {
             for: [SyllableConstraint(base: "ㄋㄧ", tone: .third), SyllableConstraint(base: "ㄏㄠ", tone: .third)]
         )
         XCTAssertTrue(nihao.contains { $0.text == "你好" && $0.sourceWeight != nil })
+    }
+
+    func testComposedWordsExcludeZeroWeightCharacterReadings() throws {
+        let store = try SQLiteLexiconStore(url: databaseURL)
+        let correct = try store.exactMatches(
+            for: [SyllableConstraint(base: "ㄩ"), SyllableConstraint(base: "ㄕ")]
+        )
+        XCTAssertTrue(correct.contains { $0.text == "於是" })
+        let incorrect = try store.exactMatches(
+            for: [SyllableConstraint(base: "ㄨ"), SyllableConstraint(base: "ㄕ")]
+        )
+        XCTAssertFalse(incorrect.contains { $0.text == "於是" })
+    }
+
+    func testZeroWeightSingleCharacterReadingIsRetained() throws {
+        let store = try SQLiteLexiconStore(url: databaseURL)
+        let readings = try store.exactMatches(for: [SyllableConstraint(base: "ㄨ")])
+        XCTAssertTrue(readings.contains { $0.text == "於" })
     }
 
     func testPatternQueriesReturnFullPronunciations() throws {
