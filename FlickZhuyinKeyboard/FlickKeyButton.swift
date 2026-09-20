@@ -142,12 +142,7 @@ final class FlickKeyButton: KeyboardButton {
         let cellWidth = keyFrame.width * 1.18
         let cellHeight = min(keyFrame.height * 1.18, 62)
         let size = CGSize(width: cellWidth * 3, height: cellHeight * 3)
-        var origin = CGPoint(x: keyFrame.midX - size.width / 2, y: keyFrame.midY - size.height / 2)
-        let contentBottom = origin.y + (mapping[.down] == nil ? size.height - cellHeight : size.height)
-        let bottomOverflow = contentBottom - (overlayHost.bounds.maxY - 4)
-        if bottomOverflow > 0 {
-            origin.y = max(overlayHost.bounds.minY, origin.y - bottomOverflow)
-        }
+        let origin = CGPoint(x: keyFrame.midX - size.width / 2, y: keyFrame.midY - size.height / 2)
         preview.frame = CGRect(origin: origin, size: size)
         preview.selectedDirection = selected
         overlayHost.addSubview(preview)

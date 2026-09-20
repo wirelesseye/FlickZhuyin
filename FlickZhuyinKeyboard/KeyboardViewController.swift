@@ -293,7 +293,7 @@ final class KeyboardViewController: UIInputViewController {
             stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 7),
             stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -7),
             stack.topAnchor.constraint(equalTo: view.topAnchor, constant: 7),
-            stack.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            stack.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -10)
         ])
         return stack
     }
@@ -599,7 +599,7 @@ final class KeyboardViewController: UIInputViewController {
     private func updateKeyboardHeight() {
         let compact = traitCollection.verticalSizeClass == .compact
         switch engine.mode {
-        case .zhuyin: heightConstraint?.constant = compact ? 220 : 260
+        case .zhuyin: heightConstraint?.constant = compact ? 220 : 280
         case .abc: heightConstraint?.constant = compact ? 190 : 230
         }
     }
