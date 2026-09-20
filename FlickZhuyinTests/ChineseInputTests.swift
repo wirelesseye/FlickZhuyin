@@ -131,15 +131,17 @@ final class SQLiteLexiconStoreTests: ChineseInputTestCase {
         XCTAssertEqual(matches.map { $0.pronunciation[0].tone }, [.third, .fourth])
     }
 
-    func testSourceWeightsArePreserved() throws {
+    func testTerraPronunciationWeightsArePreserved() throws {
         let store = try makeFixtureStore()
         let weighted = try store.exactMatches(
             for: [SyllableConstraint(base: "ㄓㄨㄥ", tone: .first), SyllableConstraint(base: "ㄨㄣ", tone: .second)]
         )
-        XCTAssertEqual(weighted.first?.sourceWeight, 0.97)
+        XCTAssertNil(weighted.first?.sourceWeight)
+        XCTAssertEqual(weighted.first?.pronunciationWeight, 0.97)
         let unweighted = try store.exactMatches(for: [SyllableConstraint(base: "ㄋㄧ", tone: .third)])
         XCTAssertEqual(unweighted.map(\.text), ["你"])
         XCTAssertNil(unweighted.first?.sourceWeight)
+        XCTAssertNil(unweighted.first?.pronunciationWeight)
     }
 
     func testMissingDatabaseThrows() {
@@ -211,7 +213,8 @@ final class SQLiteLexiconStoreTests: ChineseInputTestCase {
                 CanonicalSyllable(base: "ㄅㄚ", tone: .neutral),
             ]
         )
-        XCTAssertEqual(matches[0].sourceWeight, 0.95)
+        XCTAssertNil(matches[0].sourceWeight)
+        XCTAssertEqual(matches[0].pronunciationWeight, 0.95)
     }
 
     func testPatternMatchMixesExactAndInitialConstraints() throws {
@@ -297,9 +300,10 @@ final class SQLiteLexiconStoreTests: ChineseInputTestCase {
         }
         defer { sqlite3_close(handle) }
         var statement: OpaquePointer?
-        let sql = "EXPLAIN QUERY PLAN SELECT text, base_key, tone_key, source_weight "
+        let sql = "EXPLAIN QUERY PLAN SELECT text, base_key, tone_key, source_weight, pronunciation_weight "
             + "FROM pronunciation WHERE initial_key = 'x' AND syllable_count = 2 "
-            + "ORDER BY source_weight DESC, id LIMIT 64"
+            + "ORDER BY COALESCE(source_weight, pronunciation_weight) DESC, id "
+            + "LIMIT 64"
         XCTAssertEqual(sqlite3_prepare_v2(handle, sql, -1, &statement, nil), SQLITE_OK)
         guard let statement else {
             return XCTFail("could not prepare query plan")

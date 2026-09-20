@@ -25,8 +25,14 @@ struct BaselineDecoderScorer: DecoderScorer, Sendable {
                 throw DecoderError.scoringFailed("source weight \(weight) is outside 0...1")
             }
             cost += -log(max(weight, configuration.weightedEntryFloor))
-        } else {
+        } else if word.pronunciationWeight == nil {
             cost += configuration.unweightedWordCost
+        }
+        if let prior = word.pronunciationWeight {
+            guard prior.isFinite, prior >= 0, prior <= 1 else {
+                throw DecoderError.scoringFailed("pronunciation weight \(prior) is outside 0...1")
+            }
+            cost += -log(max(prior, configuration.weightedEntryFloor))
         }
         return cost
     }

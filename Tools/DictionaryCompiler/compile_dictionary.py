@@ -22,8 +22,8 @@ ESSAY_REPOSITORY = "https://github.com/rime/rime-essay"
 ESSAY_RAW_BASE_URL = "https://raw.githubusercontent.com/rime/rime-essay"
 ESSAY_PATH = "essay.txt"
 ESSAY_FORMAT_VERSION = 1
-COMPILER_VERSION = "4"
-SCHEMA_VERSION = 3
+COMPILER_VERSION = "5"
+SCHEMA_VERSION = 4
 REQUIRED_HEADER_KEYS = ("name", "version")
 REQUIRED_METADATA_KEYS = (
     "schema_version",
@@ -50,6 +50,7 @@ SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 SEPARATOR = "\u001f"
 MAXIMUM_PRONUNCIATIONS_PER_WORD = 16
 MAXIMUM_ESSAY_WORD_LENGTH = 16
+MINIMUM_SINGLE_CHARACTER_PRONUNCIATION_WEIGHT = 0.05
 MAXIMUM_DATABASE_BYTES = 256 * 1024 * 1024
 MAXIMUM_STORED_INTEGER = 9_223_372_036_854_775_807
 REPORT_EXAMPLE_LIMIT = 8
@@ -76,6 +77,7 @@ CREATE TABLE pronunciation (
     tone_key          TEXT NOT NULL,
     initial_key       TEXT NOT NULL,
     source_weight     REAL,
+    pronunciation_weight REAL,
     source_kind       TEXT NOT NULL CHECK (source_kind IN ('terra', 'essay', 'terra+essay')),
     terra_source_line INTEGER,
     terra_source_lines TEXT NOT NULL,
@@ -88,7 +90,11 @@ CREATE INDEX pronunciation_base_key
 ON pronunciation(base_key, syllable_count);
 
 CREATE INDEX pronunciation_initial_key
-ON pronunciation(initial_key, syllable_count, source_weight DESC);
+ON pronunciation(
+    initial_key,
+    syllable_count,
+    COALESCE(source_weight, pronunciation_weight) DESC
+);
 """
 
 
@@ -146,6 +152,7 @@ class TerraReading:
     base_syllables: tuple[str, ...]
     tones: tuple[int, ...]
     source_weight: float | None
+    pronunciation_weight: float | None
     source_line: int
 
 
@@ -161,6 +168,7 @@ class AnnotatedReading:
     tones: tuple[int, ...]
     explicit: bool
     terra_lines: tuple[int, ...]
+    pronunciation_weight: float | None
 
 
 @dataclass(frozen=True)
@@ -194,6 +202,7 @@ class MergedEntry:
     base_syllables: tuple[str, ...]
     tones: tuple[int, ...]
     source_weight: float | None
+    pronunciation_weight: float | None
     source_kind: str
     terra_source_line: int | None
     terra_source_lines: tuple[int, ...]
@@ -423,6 +432,14 @@ def compile_terra_entries(
     return rows, errors, conflicts, duplicates, sorted(distinct_pinyin)
 
 
+def terra_pronunciation_weight(text: str, source_weight: float | None) -> float | None:
+    if source_weight is None:
+        return None
+    if len(text) == 1:
+        return max(source_weight, MINIMUM_SINGLE_CHARACTER_PRONUNCIATION_WEIGHT)
+    return source_weight
+
+
 def terra_reading_sort_key(reading: TerraReading) -> tuple:
     return (
         0 if reading.source_weight is not None else 1,
@@ -437,7 +454,13 @@ def build_terra_index(rows: list[CompiledEntry]) -> TerraIndex:
     words: dict[str, list[TerraReading]] = {}
     characters: dict[str, list[TerraReading]] = {}
     for row in rows:
-        reading = TerraReading(row.base_syllables, row.tones, row.source_weight, row.source_line)
+        reading = TerraReading(
+            row.base_syllables,
+            row.tones,
+            row.source_weight,
+            terra_pronunciation_weight(row.text, row.source_weight),
+            row.source_line,
+        )
         words.setdefault(row.text, []).append(reading)
         if len(row.text) == 1:
             characters.setdefault(row.text, []).append(reading)
@@ -485,17 +508,24 @@ def compose_readings(
     bases: list[tuple[str, ...]] = []
     tones: list[tuple[int, ...]] = []
     lines: list[tuple[int, ...]] = []
+    weights: list[float | None] = []
 
     def visit(position: int) -> None:
         if len(results) >= limit:
             return
         if position == len(reading_lists):
+            pronunciation_weight: float | None = None
+            for weight in weights:
+                if weight is None:
+                    continue
+                pronunciation_weight = weight if pronunciation_weight is None else pronunciation_weight * weight
             results.append(
                 AnnotatedReading(
                     tuple(base for part in bases for base in part),
                     tuple(tone for part in tones for tone in part),
                     False,
                     tuple(line for part in lines for line in part),
+                    pronunciation_weight,
                 )
             )
             return
@@ -505,10 +535,12 @@ def compose_readings(
             bases.append(reading.base_syllables)
             tones.append(reading.tones)
             lines.append((reading.source_line,))
+            weights.append(reading.pronunciation_weight)
             visit(position + 1)
             bases.pop()
             tones.pop()
             lines.pop()
+            weights.pop()
 
     visit(0)
     return results
@@ -551,7 +583,13 @@ def annotate_essay(entries: list[EssayEntry], index: TerraIndex) -> EssayAnnotat
         explicit = index.words.get(entry.text)
         if explicit is not None:
             readings = [
-                AnnotatedReading(reading.base_syllables, reading.tones, True, (reading.source_line,))
+                AnnotatedReading(
+                    reading.base_syllables,
+                    reading.tones,
+                    True,
+                    (reading.source_line,),
+                    reading.pronunciation_weight,
+                )
                 for reading in explicit
             ]
             truncated = len(readings) > MAXIMUM_PRONUNCIATIONS_PER_WORD
@@ -631,7 +669,8 @@ def merge_rows(
             row.text,
             row.base_syllables,
             row.tones,
-            row.source_weight,
+            None,
+            terra_pronunciation_weight(row.text, row.source_weight),
             SOURCE_KIND_TERRA,
             row.source_line,
             (row.source_line,),
@@ -654,6 +693,7 @@ def merge_rows(
                     reading.base_syllables,
                     reading.tones,
                     weight,
+                    reading.pronunciation_weight,
                     SOURCE_KIND_ESSAY,
                     None,
                     reading.terra_lines,
@@ -661,6 +701,11 @@ def merge_rows(
                     entry.frequency,
                 )
                 continue
+            pronunciation_weight = (
+                existing.pronunciation_weight
+                if existing.pronunciation_weight is not None
+                else reading.pronunciation_weight
+            )
             if existing.essay_source_line is not None:
                 duplicate_pronunciations += 1
                 if entry.frequency <= (existing.raw_frequency or 0):
@@ -668,6 +713,7 @@ def merge_rows(
                 rows[key] = replace(
                     existing,
                     source_weight=weight,
+                    pronunciation_weight=pronunciation_weight,
                     essay_source_line=entry.source_line,
                     raw_frequency=entry.frequency,
                 )
@@ -676,6 +722,7 @@ def merge_rows(
             rows[key] = replace(
                 existing,
                 source_weight=weight,
+                pronunciation_weight=pronunciation_weight,
                 source_kind=SOURCE_KIND_MERGED,
                 essay_source_line=entry.source_line,
                 raw_frequency=entry.frequency,
@@ -839,9 +886,9 @@ def write_database(
         )
         connection.executemany(
             "INSERT INTO pronunciation ("
-            "text, syllable_count, base_key, tone_key, initial_key, source_weight, source_kind,"
-            " terra_source_line, terra_source_lines, essay_source_line, raw_frequency"
-            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "text, syllable_count, base_key, tone_key, initial_key, source_weight, pronunciation_weight,"
+            " source_kind, terra_source_line, terra_source_lines, essay_source_line, raw_frequency"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (
                     row.text,
@@ -850,6 +897,7 @@ def write_database(
                     row.tone_key,
                     row.initial_key,
                     row.source_weight,
+                    row.pronunciation_weight,
                     row.source_kind,
                     row.terra_source_line,
                     json.dumps(row.terra_source_lines, separators=(",", ":")),
@@ -982,6 +1030,7 @@ def build_database(
         },
         "maxSyllableCount": max_syllables,
         "weightedEntries": sum(1 for row in rows if row.source_weight is not None),
+        "pronunciationWeightedEntries": sum(1 for row in rows if row.pronunciation_weight is not None),
         "essayWeightedEntries": sum(1 for row in rows if row.raw_frequency is not None),
         "normalization": {
             "formula": WEIGHT_NORMALIZATION,

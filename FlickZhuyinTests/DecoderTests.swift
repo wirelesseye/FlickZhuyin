@@ -39,6 +39,7 @@ private func testWord(
     syllables: [SyllableConstraint],
     pronunciation: [CanonicalSyllable]? = nil,
     weight: Double?,
+    pronunciationWeight: Double? = nil,
     parserCost: Double = 0
 ) -> WordEdge {
     let edges = syllables.enumerated().map { offset, constraint in
@@ -54,6 +55,7 @@ private func testWord(
         text: text,
         pronunciation: pronunciation ?? syllables.map { CanonicalSyllable(base: $0.base, tone: $0.tone ?? .first) },
         sourceWeight: weight,
+        pronunciationWeight: pronunciationWeight,
         syllableEdges: edges
     )
 }
@@ -119,6 +121,64 @@ final class DecoderScorerTests: XCTestCase {
         let cost = try scorer.cost(for: word)
         XCTAssertTrue(cost.isFinite)
         XCTAssertEqual(cost, (-log(1e-9)) + 0.35, accuracy: 1e-9)
+    }
+
+    func testPronunciationWeightAddsPriorCost() throws {
+        let word = testWord(
+            0,
+            1,
+            text: "於",
+            syllables: [SyllableConstraint(base: "ㄨ", tone: .first)],
+            weight: 0.25,
+            pronunciationWeight: 0.05
+        )
+        XCTAssertEqual(
+            try scorer.cost(for: word),
+            0.35 + (-log(0.25)) + (-log(0.05)),
+            accuracy: 1e-12
+        )
+    }
+
+    func testPronunciationWeightCarriesCostWithoutFrequencyWeight() throws {
+        let word = testWord(
+            0,
+            1,
+            text: "中",
+            syllables: [SyllableConstraint(base: "ㄓ", tone: .first)],
+            weight: nil,
+            pronunciationWeight: 0.5
+        )
+        XCTAssertEqual(try scorer.cost(for: word), 0.35 + (-log(0.5)), accuracy: 1e-12)
+    }
+
+    func testZeroPronunciationWeightUsesFloor() throws {
+        let word = testWord(
+            0,
+            2,
+            text: "甲乙",
+            syllables: [SyllableConstraint(base: "ㄓ", tone: .first), SyllableConstraint(base: "ㄨ", tone: .first)],
+            weight: nil,
+            pronunciationWeight: 0
+        )
+        XCTAssertEqual(try scorer.cost(for: word), 0.35 + (-log(1e-9)), accuracy: 1e-9)
+    }
+
+    func testIllegalPronunciationWeightsThrow() {
+        for prior in [-0.1, 1.1, Double.nan, Double.infinity] {
+            let word = testWord(
+                0,
+                1,
+                text: "中",
+                syllables: [SyllableConstraint(base: "ㄓ", tone: .first)],
+                weight: nil,
+                pronunciationWeight: prior
+            )
+            XCTAssertThrowsError(try scorer.cost(for: word), "prior \(prior)") { error in
+                guard case .scoringFailed = error as? DecoderError else {
+                    return XCTFail("expected scoringFailed, got \(error)")
+                }
+            }
+        }
     }
 
     func testIllegalWeightsThrow() {
@@ -607,13 +667,19 @@ final class DecoderProductionIntegrationTests: XCTestCase {
         repositoryRoot.appendingPathComponent("Generated/flickzhuyin.sqlite3")
     }
 
-    private func decode(_ tokens: [ZhuyinInputToken]) throws -> [DecodedCandidate] {
+    private func decode(
+        _ tokens: [ZhuyinInputToken],
+        maximumCandidates: Int = DecoderConfiguration().maximumCandidates
+    ) throws -> [DecodedCandidate] {
         let store = try SQLiteLexiconStore(url: databaseURL)
         let parser = try SyllableParser(store: store)
         let matcher = DictionaryMatcher(store: store)
         let syllableLattice = parser.lattice(for: tokens)
         let wordLattice = try matcher.buildLattice(from: syllableLattice)
-        return try Decoder().decode(syllableLattice: syllableLattice, wordLattice: wordLattice)
+        var configuration = DecoderConfiguration()
+        configuration.maximumCandidates = maximumCandidates
+        return try Decoder(configuration: configuration)
+            .decode(syllableLattice: syllableLattice, wordLattice: wordLattice)
     }
 
     private func tokens(_ symbols: String, tones: [MandarinTone?] = []) -> [ZhuyinInputToken] {
@@ -652,7 +718,7 @@ final class DecoderProductionIntegrationTests: XCTestCase {
     }
 
     func testSameTextKeepsSeparatePronunciationsInDecoder() throws {
-        let candidates = try decode(tokens("ㄧ"))
+        let candidates = try decode(tokens("ㄧ"), maximumCandidates: 512)
         let yi = candidates.filter { $0.text == "一" }
         XCTAssertEqual(yi.count, 3)
         XCTAssertEqual(
@@ -681,7 +747,7 @@ final class DecoderProductionIntegrationTests: XCTestCase {
     }
 
     func testInitialAbbreviationProducesWordCandidates() throws {
-        let candidates = try decode(tokens("ㄅ"))
+        let candidates = try decode(tokens("ㄅ"), maximumCandidates: 64)
         let bu = candidates.filter { $0.text == "不" }
         XCTAssertEqual(bu.count, 2)
         XCTAssertEqual(Set(bu.map(\.pronunciation)), [

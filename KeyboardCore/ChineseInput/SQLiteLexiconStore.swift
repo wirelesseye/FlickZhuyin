@@ -5,7 +5,7 @@ private let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self
 
 final class SQLiteLexiconStore: LexiconStore, @unchecked Sendable {
     static let defaultCacheCapacity = 256
-    static let schemaVersion: Int64 = 3
+    static let schemaVersion: Int64 = 4
     static let requiredMetadataKeys = [
         "schema_version",
         "terra_source_repository",
@@ -52,7 +52,7 @@ final class SQLiteLexiconStore: LexiconStore, @unchecked Sendable {
             exactStatement = try Self.prepare(
                 opened,
                 sql: """
-                SELECT text, tone_key, source_weight
+                SELECT text, tone_key, source_weight, pronunciation_weight
                 FROM pronunciation
                 WHERE base_key = ? AND syllable_count = ?
                 ORDER BY id
@@ -61,10 +61,10 @@ final class SQLiteLexiconStore: LexiconStore, @unchecked Sendable {
             patternStatement = try Self.prepare(
                 opened,
                 sql: """
-                SELECT text, base_key, tone_key, source_weight
+                SELECT text, base_key, tone_key, source_weight, pronunciation_weight
                 FROM pronunciation
                 WHERE initial_key = ? AND syllable_count = ?
-                ORDER BY source_weight DESC, id
+                ORDER BY COALESCE(source_weight, pronunciation_weight) DESC, id
                 LIMIT ?
                 """
             )
@@ -197,11 +197,18 @@ final class SQLiteLexiconStore: LexiconStore, @unchecked Sendable {
             } else {
                 weight = sqlite3_column_double(exactStatement, 2)
             }
+            let pronunciationWeight: Double?
+            if sqlite3_column_type(exactStatement, 3) == SQLITE_NULL {
+                pronunciationWeight = nil
+            } else {
+                pronunciationWeight = sqlite3_column_double(exactStatement, 3)
+            }
             matches.append(
                 LexiconMatch(
                     text: String(cString: textPointer),
                     pronunciation: pronunciation,
-                    sourceWeight: weight
+                    sourceWeight: weight,
+                    pronunciationWeight: pronunciationWeight
                 )
             )
         }
@@ -259,7 +266,8 @@ final class SQLiteLexiconStore: LexiconStore, @unchecked Sendable {
                 LexiconMatch(
                     text: row.text,
                     pronunciation: pronunciation,
-                    sourceWeight: row.sourceWeight
+                    sourceWeight: row.sourceWeight,
+                    pronunciationWeight: row.pronunciationWeight
                 )
             )
             if matches.count == resultLimit {
@@ -316,12 +324,19 @@ final class SQLiteLexiconStore: LexiconStore, @unchecked Sendable {
             } else {
                 weight = sqlite3_column_double(patternStatement, 3)
             }
+            let pronunciationWeight: Double?
+            if sqlite3_column_type(patternStatement, 4) == SQLITE_NULL {
+                pronunciationWeight = nil
+            } else {
+                pronunciationWeight = sqlite3_column_double(patternStatement, 4)
+            }
             rows.append(
                 ScannedRow(
                     text: String(cString: textPointer),
                     bases: bases,
                     tones: tones,
-                    sourceWeight: weight
+                    sourceWeight: weight,
+                    pronunciationWeight: pronunciationWeight
                 )
             )
         }
@@ -453,6 +468,7 @@ private struct ScannedRow {
     let bases: [String]
     let tones: [MandarinTone]
     let sourceWeight: Double?
+    let pronunciationWeight: Double?
 }
 
 private struct BoundedCache<Key: Hashable, Value> {

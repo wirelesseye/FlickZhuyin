@@ -26,13 +26,14 @@
   },
   "maxSyllableCount": 16,
   "weightedEntries": 727602,
+  "pronunciationWeightedEntries": 421450,
   "essayWeightedEntries": 727602,
   "normalization": {
     "formula": "log1p(frequency)/log1p(max_frequency)",
     "maximumFrequency": 4822928
   },
   "database": {
-    "bytes": 160256000,
+    "bytes": 165117952,
     "limitBytes": 268435456
   },
   "errors": [],
@@ -157,6 +158,6 @@
       "frequencyMax": 4822928
     }
   },
-  "compilerVersion": "4",
-  "schemaVersion": 3
+  "compilerVersion": "5",
+  "schemaVersion": 4
 }

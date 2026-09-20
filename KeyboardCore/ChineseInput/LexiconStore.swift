@@ -55,6 +55,19 @@ struct LexiconMatch: Equatable, Sendable {
     let text: String
     let pronunciation: [CanonicalSyllable]
     let sourceWeight: Double?
+    let pronunciationWeight: Double?
+
+    init(
+        text: String,
+        pronunciation: [CanonicalSyllable],
+        sourceWeight: Double?,
+        pronunciationWeight: Double? = nil
+    ) {
+        self.text = text
+        self.pronunciation = pronunciation
+        self.sourceWeight = sourceWeight
+        self.pronunciationWeight = pronunciationWeight
+    }
 }
 
 protocol LexiconStore: Sendable {

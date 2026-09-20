@@ -31,8 +31,8 @@ final class ProductionDictionaryIntegrationTests: XCTestCase {
         let essayManifest = try readJSON(essayManifestURL)
         let report = try readJSON(reportURL)
 
-        XCTAssertEqual(metadata["schema_version"], "3")
-        XCTAssertEqual(metadata["compiler_version"], "4")
+        XCTAssertEqual(metadata["schema_version"], "4")
+        XCTAssertEqual(metadata["compiler_version"], "5")
         XCTAssertEqual(metadata["terra_source_repository"], terraManifest["repository"] as? String)
         XCTAssertEqual(metadata["terra_source_commit"], terraManifest["commit"] as? String)
         XCTAssertEqual(metadata["terra_source_sha256"], terraManifest["sha256"] as? String)
@@ -104,7 +104,16 @@ final class ProductionDictionaryIntegrationTests: XCTestCase {
     func testZeroWeightSingleCharacterReadingIsRetained() throws {
         let store = try SQLiteLexiconStore(url: databaseURL)
         let readings = try store.exactMatches(for: [SyllableConstraint(base: "ㄨ")])
-        XCTAssertTrue(readings.contains { $0.text == "於" })
+        let 於 = try XCTUnwrap(readings.first { $0.text == "於" })
+        XCTAssertNotNil(於.sourceWeight)
+        XCTAssertEqual(於.pronunciationWeight, 0.05)
+    }
+
+    func testPronunciationPriorSeparatesRareAndCommonReadings() throws {
+        let store = try SQLiteLexiconStore(url: databaseURL)
+        let readings = try store.exactMatches(for: [SyllableConstraint(base: "ㄩ")])
+        let 於 = try XCTUnwrap(readings.first { $0.text == "於" })
+        XCTAssertEqual(於.pronunciationWeight, 1.0)
     }
 
     func testPatternQueriesReturnFullPronunciations() throws {

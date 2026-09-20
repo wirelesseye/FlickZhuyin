@@ -194,6 +194,7 @@ struct DictionaryMatcher: Sendable {
                 text: match.text,
                 pronunciation: match.pronunciation,
                 sourceWeight: match.sourceWeight,
+                pronunciationWeight: match.pronunciationWeight,
                 syllableEdges: syllableEdges
             )
             return
@@ -205,6 +206,7 @@ struct DictionaryMatcher: Sendable {
                 text: match.text,
                 pronunciation: match.pronunciation,
                 sourceWeight: match.sourceWeight,
+                pronunciationWeight: match.pronunciationWeight,
                 syllableEdges: syllableEdges
             )
         )

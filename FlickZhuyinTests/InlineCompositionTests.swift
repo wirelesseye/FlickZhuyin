@@ -452,6 +452,21 @@ final class ChineseInputPipelineTests: ChineseInputTestCase {
         XCTAssertTrue(candidates.prefix(3).contains { $0.text == "知道" })
     }
 
+    func testProductionGuanWuDoesNotLeadWithRareYuReading() async throws {
+        let pipeline = try LexiconChineseInputPipeline(
+            store: try SQLiteLexiconStore(url: productionDatabaseURL)
+        )
+        let wu = try await pipeline.candidates(
+            for: [.symbol("ㄍ"), .symbol("ㄨ"), .symbol("ㄢ"), .tone(.first), .symbol("ㄨ")]
+        )
+        XCTAssertFalse(wu.isEmpty)
+        XCTAssertNotEqual(wu.first?.text, "關於")
+        let yu = try await pipeline.candidates(
+            for: [.symbol("ㄍ"), .symbol("ㄨ"), .symbol("ㄢ"), .tone(.first), .symbol("ㄩ")]
+        )
+        XCTAssertEqual(yu.first?.text, "關於")
+    }
+
     func testProductionWuShiDoesNotLeadWithZeroWeightComposition() async throws {
         let pipeline = try LexiconChineseInputPipeline(
             store: try SQLiteLexiconStore(url: productionDatabaseURL)
@@ -498,8 +513,11 @@ final class ChineseInputPipelineTests: ChineseInputTestCase {
     }
 
     func testExplicitYiTonesStillMatchYi() async throws {
+        var configuration = DecoderConfiguration()
+        configuration.maximumCandidates = 512
         let pipeline = try LexiconChineseInputPipeline(
-            store: try SQLiteLexiconStore(url: productionDatabaseURL)
+            store: try SQLiteLexiconStore(url: productionDatabaseURL),
+            decoder: Decoder(configuration: configuration)
         )
         for tone in [MandarinTone.first, .second, .fourth] {
             let candidates = try await pipeline.candidates(for: [.symbol("ㄧ"), .tone(tone)])
