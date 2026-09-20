@@ -514,7 +514,8 @@ final class KeyboardViewController: UIInputViewController {
                 button.tintColor = .label
             case .cursorLeft, .cursorRight:
                 button.setTitle(nil, for: .normal)
-                button.setImage(keyIcon(named: key == .cursorLeft ? "arrow.left" : "arrow.right"), for: .normal)
+                let symbol = key == .cursorLeft ? "arrowtriangle.left.fill" : "arrowtriangle.right.fill"
+                button.setImage(keyIcon(named: symbol, pointSize: 12), for: .normal)
                 button.tintColor = .label
             case .space:
                 button.setTitle(nil, for: .normal)
@@ -620,8 +621,8 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
-    private func keyIcon(named name: String) -> UIImage? {
-        let configuration = UIImage.SymbolConfiguration(pointSize: 16, weight: .regular)
+    private func keyIcon(named name: String, pointSize: CGFloat = 16) -> UIImage? {
+        let configuration = UIImage.SymbolConfiguration(pointSize: pointSize, weight: .regular)
         return UIImage(systemName: name, withConfiguration: configuration)
     }
 
