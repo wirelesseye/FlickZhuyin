@@ -1,16 +1,30 @@
 # FlickZhuyin
 
-FlickZhuyin 是一個實驗性的 iOS 自訂注音鍵盤，使用類似日文假名鍵盤的 Flick（滑動）操作，在九宮格上輸入注音符號。
+FlickZhuyin 是一個實驗性的 iOS 自訂注音鍵盤，在九宮格上以類似日文假名鍵盤的 Flick（滑動）操作輸入注音符號。
 
-目前專案仍處於輸入原型階段：中文模式已把注音音節解析、詞庫查詢、詞格（word lattice）建立與 Top-K 解碼接到鍵盤，會用 iOS marked text 在宿主輸入框即時顯示「已選字＋未選注音」，並可從候選列選字；尚未構成完整音節的聲母輸入也會以詞典的完整讀音產生漢字候選。目前的候選排序仍是 baseline，還不是自然的語言模型選字，也沒有使用者學習與自動選字。
+中文模式已支援注音組字、候選選字與 Inline 顯示，並可與全鍵盤 ABC 模式切換；候選排序仍在開發中，尚未提供語言模型自動選字、使用者學習與 iPad 專用版面，詳見「尚未支援」。
+
+## 系統需求
+
+- iPhone（尚未針對 iPad 最佳化）
+- iOS 17.0 或以上
+- 自行建置需要 macOS、Xcode 15 或以上與 Apple Development Team；建置與開發細節見 [DEVELOPMENT.md](DEVELOPMENT.md)
+
+## 安裝與啟用
+
+1. 以 Xcode 開啟 `FlickZhuyin.xcodeproj`，在 `FlickZhuyin` 與 `FlickZhuyinKeyboard` targets 選擇 Development Team，並將 `FlickZhuyin` App 執行到模擬器或實機。
+2. 開啟 iOS「設定」→「一般」→「鍵盤」→「鍵盤」→「新增鍵盤」，選擇 FlickZhuyin。
+3. 返回鍵盤列表，點選 FlickZhuyin，開啟「允許完整取用」並確認授權。這是觸覺回饋所需的權限；未開啟時鍵盤仍可輸入，只是不會震動。
+4. 在文字欄中以地球鍵切換至 FlickZhuyin。
+
+容器 App 提供測試文字欄、鍵盤設定與「第三方授權」。
 
 ## 功能
 
 - 注音九宮格 Flick 輸入
 - 中文與全鍵盤 ABC 模式切換
-- Inline 組字：宿主輸入框即時顯示已選字與未選注音
-- 最多 30 個漢字／注音候選，可點選組字；游標前輸入恰好為單一完整音節時，所有完全匹配的單字候選會接在 Top-K 之後（聲調可省略）
-- 候選列右側的箭頭按鈕可展開候選網格，一次瀏覽更多候選；展開時按鍵區會暫時隱藏
+- Inline 組字：宿主輸入框即時顯示已選文字與未選注音
+- 候選列與可展開的候選網格
 - 聲母縮寫與混合候選：`ㄅ`、`ㄅㄅ`、`ㄅㄨㄓㄉ` 等輸入可混用完整音節與單符號縮寫，查得「不知道」這類完整詞條
 - 第一至第四聲 Flick 選擇
 - 獨立輕聲鍵
@@ -19,27 +33,6 @@ FlickZhuyin 是一個實驗性的 iOS 自訂注音鍵盤，使用類似日文假
 - iPhone 直向與橫向版面
 - 深色及淺色模式
 - 按鍵與 Flick 方向切換的觸覺回饋（需要「允許完整取用」）
-
-## 系統需求
-
-- iOS 17.0 或以上
-- Xcode 15 或以上
-- 可用的 Apple Development Team（安裝至實機時需要）
-
-專案目前只以 iPhone 為目標裝置，尚未針對 iPad 最佳化。
-
-## 安裝與啟用
-
-1. 使用 Xcode 開啟 `FlickZhuyin.xcodeproj`。
-2. 在 `FlickZhuyin` 與 `FlickZhuyinKeyboard` targets 的 Signing & Capabilities 中選擇 Development Team。
-3. 在模擬器或實機上執行 `FlickZhuyin` App。
-4. 開啟 iOS「設定」。
-5. 前往「一般」→「鍵盤」→「鍵盤」→「新增鍵盤」。
-6. 選擇 FlickZhuyin。
-7. 返回鍵盤列表，點選 FlickZhuyin，開啟「允許完整取用」並確認授權。這是第三方鍵盤觸發觸覺回饋所需的權限。
-8. 在文字欄中使用地球鍵切換至 FlickZhuyin。
-
-若未開啟「允許完整取用」，鍵盤仍可輸入，但按鍵與 Flick 方向切換不會產生觸覺回饋。容器 App 本身只提供一個文字欄，方便測試鍵盤。
 
 ## 注音模式
 
@@ -75,34 +68,27 @@ FlickZhuyin 是一個實驗性的 iOS 自訂注音鍵盤，使用類似日文假
 ㄓㄨˋㄧㄣˉ
 ```
 
-### Inline 組字與候選
+## 組字、候選與選字
 
-中文 composition 由「已選文字」與「未選注音」兩部分組成，會以 marked text 即時顯示在宿主輸入框。例如 `ㄓㄨˋ → 注 → ㄧㄣˉ → 注音`：
+組字內容由「已選文字」與「未選注音」兩部分組成，會以 marked text 即時顯示在輸入框。例如輸入 `ㄓㄨˋ` 並選「注」後再輸入 `ㄧㄣˉ`，畫面會依序顯示 `ㄓㄨˋ`、`注`、`注ㄧㄣˉ`、`注音`。
 
-- 輸入注音後，輸入框立即顯示原始注音（例如 `注ㄧㄣˉ`），候選列同步查詢 production 詞典。
-- 候選查詢在背景執行，完成前候選列維持前一次結果（輸入框仍即時顯示注音），完成後才換成 Decoder 的 Top-K 候選，避免查詢期間閃現只有注音的內容；詞典缺失或查詢失敗時才顯示原始注音 fallback。候選列依文字合併、每組保留分數最低者，raw 注音候選獨立保留。
-- 游標前的未選注音恰好構成一個完整音節時（例如 `ㄓㄨ`、`ㄒㄧㄢ`），該音節所有完全匹配的單字候選會以 decoder 分數排序接在 Top-K 與 raw 注音 fallback 之後，不受 Top-K 上限限制；輸入省略聲調時接受所有聲調，已在前段出現過的同字不重複。
-- 候選列可水平捲動；右側箭頭按鈕展開後候選列保留為第一列並鎖住捲動：顯示不完全的候選會被漸變加大的間距推出可見區域，完整可見的候選維持原本大小並撐滿第一列，被推出的候選與其他放不下的候選一起以滑入動畫出現在下方列表；列表選項維持原本寬度、自動換行排列，每列數量隨寬度變動，只有單一選項寬於整個列表寬度時才會縮小字體（鍵盤高度與按鍵尺寸不變，按鍵區淡出並由覆蓋在上方的候選列表取代）。選字或候選清單變空時會自動收合；鍵盤的 decoder 上限為 30 個候選，`KeyboardCore` 的預設仍為 10。
-- 候選只查詢游標前的未選注音音節串：以方向鍵把游標移到 `ㄓㄨˋ` 之後，候選列只出現 `ㄓㄨˋ` 的候選；長按方向鍵可連續移動游標；選字後游標移至 composition 結尾，並接著查詢剩下的未選音節。
-- 點擊候選會把文字加入 composition，並保留產生它的注音；可繼續輸入下一段，不會提前結束組字。
-- 選完所有未選音節後：預設（App 的「選完字後自動提交」開啟）會直接提交 composition；關閉時維持 marked text，需按 Return／「確定」才提交。
-- 只輸入聲母時（例如 `ㄅ`、`ㄅㄅ`），候選列以詞典回傳的完整讀音提供漢字候選；完整注音候選仍優先於縮寫候選，raw 注音一律保留。
-- 同一個多字詞可以混用完整音節與單符號縮寫（例如 `ㄅㄨㄓㄉ` 會查到「不知道」）。單符號縮寫包含尚未構成完整音節的聲母，以及 `ㄧ`、`ㄨ`、`ㄩ`、`ㄦ` 等完整單符號音節；當同一位置已有更長的完整音節時（例如輸入了 `ㄨㄛ`），該符號不再另外解讀為縮寫。
-- 仍不支援任意音節前綴（例如 `ㄅㄧ` 不會擴張成 `ㄅㄧㄝ`）。pattern 查詢有回傳上限與掃描上限，不會無界掃描。
+- 輸入注音後，輸入框會立即顯示注音；候選查詢在背景執行，完成前候選列維持前一次結果。
+- 候選列最多顯示 30 個漢字／注音候選，可水平捲動；點選候選即把文字加入組字，並保留產生它的注音，可繼續輸入下一段。
+- 候選列右側的箭頭按鈕可展開候選網格，一次瀏覽更多候選；展開時按鍵區會暫時隱藏，選字或候選清單變空時會自動收合。
+- 游標前的未選注音恰好構成一個完整音節時（例如 `ㄓㄨ`、`ㄒㄧㄢ`），該音節所有完全匹配的單字候選會接在一般候選之後，不受 30 個上限限制（聲調可省略）。
+- 只輸入聲母時（例如 `ㄅ`、`ㄅㄅ`），候選列會以詞庫中的完整讀音提供漢字候選。同一個多字詞可以混用完整音節與單符號縮寫（例如 `ㄅㄨㄓㄉ` 會查到「不知道」）。
+- 候選只查詢游標前的未選注音；以方向鍵移動游標後，候選會跟著改變。長按方向鍵可連續移動游標。
 - 有未選注音時，中央按鍵是聲調鍵；只有已選文字時，中央按鍵是一般空白鍵。
-- Return 會提交 composition（提交組字內容，不插入換行）；尚未選字的注音會原樣提交。組字中顯示「確定」；其餘情況跟隨宿主輸入框的 `returnKeyType`：有對應 SF Symbol 時顯示圖示（搜尋、傳送、完成、路線、緊急通話、前往、下一項、繼續），沒有圖示的類型顯示文字（Google、Yahoo、加入）；`returnKeyType` 為 default 或無法讀取時顯示換行圖示。`returnKeyType` 非 default 時，按鍵背景使用 `UIColor.systemBlue`、前景為白色；組字中的「確定」與 default 狀態維持標準按鍵外觀。
-- 空白鍵不提交有組字內容的 composition；沒有組字內容時才會輸入空白。
-- 切換至 ABC 或切換系統鍵盤前，會先提交 composition。
-- 刪除鍵依序刪除 pending 注音、撤銷最後一次選字（還原其原始注音）、最後才刪除文件內容；長按會連續重複刪除。
-- 宿主切換輸入欄位或游標位置改變時，會清除本地 composition，不重複插入文字。
+- Return 會提交組字內容（不插入換行）；尚未選字的注音會原樣提交。組字中按鍵顯示「確定」；其餘情況跟隨輸入框類型顯示對應圖示或文字（例如搜尋、傳送、完成）。
+- 空白鍵在有組字內容時不輸入空白；沒有組字內容時才輸入空白。
+- 刪除鍵依序刪除未選注音、撤銷最後一次選字（還原其原始注音），最後才刪除文件內容；長按可連續刪除。
+- 切換至 ABC、切換系統鍵盤或移至其他輸入欄位前，會先提交或清除組字。
 
-候選查詢在背景執行，並以遞增 revision 防止較舊的非同步結果覆蓋較新的輸入；詞典缺失或查詢失敗時退回原始注音候選，鍵盤與 ABC 模式仍可正常使用。
+目前仍不支援任意音節前綴匹配（例如 `ㄅㄧ` 不會擴張成 `ㄅㄧㄝ`）。
 
 ## ABC 模式
 
-按下中文模式中的 `ABC` 鍵可切換至全鍵盤英文模式；按下 `中` 可切回注音模式。
-
-ABC 模式提供：
+按下中文模式中的 `ABC` 鍵可切換至全鍵盤英文模式；按下 `中` 可切回注音模式。ABC 模式提供：
 
 - QWERTY 字母排列
 - 單次 Shift、雙擊 Shift 開啟 Caps Lock
@@ -110,143 +96,14 @@ ABC 模式提供：
 - 長按 Delete 可連續刪除
 - 系統鍵盤切換鍵
 
-模式會在同一次 Keyboard Extension 生命週期內保留，但不會跨程序重新啟動保存。
+模式會在同一次鍵盤生命週期內保留，重新啟動後回到注音模式。
 
-## 專案結構
+## 設定
 
-```text
-FlickZhuyinApp/                SwiftUI 容器 App 與測試文字欄
-FlickZhuyinKeyboard/           UIKit Keyboard Extension、按鍵與 Flick UI
-KeyboardCore/                  鍵盤狀態機、按鍵模型及注音配置
-KeyboardCore/ChineseInput/     音節解析、詞庫查詢、詞格與 Top-K 解碼（實驗中）
-FlickZhuyinTests/              狀態機、Flick 映射與中文輸入核心測試
-Tools/DictionaryCompiler/      Rime 詞典離線編譯器與 Python 測試
-Vendor/rime-terra-pinyin/      鎖定版本的上游詞典、授權與 manifest
-Vendor/rime-essay/             鎖定版本的上游預設詞彙、授權與 manifest
-Generated/                     編譯產物（SQLite 詞典與 report）
-```
+在 FlickZhuyin App 中可調整：
 
-`KeyboardEngine` 是純 Swift 狀態機：輸入事件產生一組 `KeyboardUpdate`（文件 effects、候選請求、是否作廢候選），`KeyboardViewController` 只依序把 effects 寫進文件，不自行推斷何時提交。`ZhuyinComposition` 保存已選 chunks 與 pending tokens，`ZhuyinInputToken` 同時供鍵盤狀態與 Parser 使用。這讓組字、刪除、提交與模式切換都能獨立測試。
-
-中文輸入核心位於 `KeyboardCore/ChineseInput/`：
-
-- `SyllableParser` 從詞庫的合法音節清單建立音節格（syllable lattice），支援省略聲調、部分聲調與完整聲調；可同時作為完整音節與聲母前綴的符號（例如 `ㄓ`）會產生完整與聲母縮寫兩條 edge。
-- `SQLiteLexiconStore` 以唯讀模式開啟 bundle 內的 SQLite 詞典，只把 400 多個合法無調注音載入記憶體。完整注音查詢走 `base_key`，pattern（exact／initial 混合）查詢由 pattern 推導 `initial_key` 後走索引掃描，掃描量受 scan limit 限制，再逐列套用 exact 條件並在收集滿 result limit 後停止；三種查詢各有具上限的 LRU cache。
-- `DictionaryMatcher` 沿音節格以統一的 pattern expansion 查詢詞庫：完整 edge 產生 `.exact`、單符號無調 edge 產生 `.initial`，同一位置可同時保留兩種解讀，全部 exact 時仍走快速 `exactMatches`；pattern 與查詢結果都會記憶化，混合查詢受 `patternMatchResultLimit`／`patternMatchScanLimit` 限制。
-- `Decoder` 將詞格與 raw 注音音節合併成永遠連通的解碼圖，以精確 Top-K DAG 動態規劃輸出穩定排序的候選；沒有詞典匹配的片段會以原始注音保留。
-- `LexiconChineseInputPipeline` 在初始化時建立並長期持有 store、parser、matcher 與 decoder，把 Top-K 結果轉成精簡的 `InputCandidate`；轉換時依文字合併候選、每組保留分數最低者，raw 注音候選不受合併影響，並在必要時補上 raw 注音候選；若游標前輸入是全範圍的完整單一音節，再從 store 取出該音節所有單字詞條、以同一 scorer 計分後接在最後。
-- 排序由可替換的 `DecoderScorer` 負責，目前 `BaselineDecoderScorer` 使用 Essay 詞頻 `sourceWeight`、Terra 讀音可信度 `pronunciationWeight`、parser cost 與簡易分詞懲罰，不是完整的語言模型排序。
-
-`FlickZhuyinKeyboard/ChineseInputCoordinator.swift` 負責非同步協調：每次 pending tokens 改變就增加 revision 並進入 loading，但保留既有候選直到新結果抵達，背景完成後只在 revision 與 token snapshot 都相符時套用結果；詞典缺失或查詢失敗時才發布 raw 注音 fallback。`KeyboardDocumentClient` 與 `DocumentEffectApplier` 隔離 `UITextDocumentProxy`，`CandidateBarView` 以水平 `UICollectionView` 提供固定高度的候選列與展開按鈕，`ExpandedCandidateView` 以垂直 `UICollectionView` 提供展開後的候選列表，兩者都只建立可見範圍的 cell，選項依原寬度自動換行排列。
-
-pinned Terra 詞典經過碼表最小化，常見詞如「注音」「你好」原本屬於 Rime 的 preset vocabulary，未包含在 `terra_pinyin.dict.yaml` 中。編譯器改以 pinned Rime Essay 補齊這些常用詞：Terra 提供字音、多音字與明確詞條，Essay 提供常用詞與詞頻；沒有 Terra 明確讀音的 Essay 詞條會以各字的 Terra 單字讀音離線自動標音。自動標音時，若某字已有正權重讀音，Terra 明確標為 `0%` 的罕見讀音不參與組合（未標權重的讀音仍會保留，例如「於」合成「於是」只會得到 `ㄩˊ ㄕˋ`）；只有當所有讀音皆為 `0%` 或未標權重時，才保留全部讀音作為 fallback。合併後的 SQLite 以 `(text, base_key, tone_key)` 為唯一鍵，Essay 詞頻經 log1p 正規化為 `source_weight`，因此「注音」「你好」等詞是帶權重的單一詞條，而不是多個無權重單字臨時拼接。schema v4 把詞頻與發音可信度分開：`source_weight` 只存 Essay 詞頻，`pronunciation_weight` 存 Terra 的讀音權重；Terra 單字讀音低於 5% 時以 5% 為下限（例如「於」的 `ㄨˉ` 保留為 0.05，不再被 Essay 詞頻放大），Runtime 成本為詞頻成本加 `-log(pronunciation_weight)`。schema v4 也為每個 canonical 讀音寫入 `initial_key`（每個音節第一個注音符號，以 U+001F 分隔）並建立 `pronunciation_initial_key` 索引，供聲母縮寫與完整／縮寫混合的 pattern 查詢等值掃描。無法標音或超過組合上限的詞條會統計在編譯報告中，不會靜默遺失。
-
-## 建置與測試
-
-在 Xcode 中選擇 `FlickZhuyin` scheme 後執行 Build 或 Test，或使用命令列：
-
-```sh
-xcodebuild \
-  -project FlickZhuyin.xcodeproj \
-  -scheme FlickZhuyin \
-  -destination 'platform=iOS Simulator,name=<模擬器名稱>' \
-  test
-```
-
-若本機使用的模擬器名稱不同，請將 `name` 替換成 Xcode 中現有的 iPhone 模擬器。
-
-目前測試涵蓋：
-
-- ABC 大小寫與 Caps Lock
-- Flick 方向映射
-- 第一至第四聲與獨立輕聲
-- 聲調保留位置及連續聲調取代
-- 候選選擇、刪除、Return、空白與模式切換的 effect 順序
-- inline marked text 組合、已選 chunk 撤銷與 source token 還原
-- 音調鍵顯示只依 pending tokens
-- SQLite 詞庫查詢（完整聲調、省略聲調、混合聲調、輕聲、多音字）
-- 音節格切分、incomplete/fallback 連通性、完整／聲母縮寫雙重解讀與 eligible edge 判定
-- 詞格的多字詞、去重、展開上限，以及 pattern lookup 的記憶化、result／scan limit、cheapest-segmentation 去重與 exact/initial 去重
-- decoder 的 scoring、lattice 驗證、Top-K 限制、去重與 deterministic tie-break
-- pipeline 的 fixture 與 production 候選、同文字候選合併、raw fallback 保留、空輸入與錯誤傳遞
-- 完整單一音節輸入會把該音節所有完全匹配的單字接在 raw fallback 之後（含省略聲調時的跨聲調匹配、超過 Top-K 的候選與去重），多音節輸入不追加
-- `ㄅ`、`ㄅㄅ` 的漢字候選、exact 候選優先於聲母縮寫候選、高頻縮寫候選優先與 raw 注音保留
-- 混合完整音節與縮寫的 `ㄅㄨㄓㄉ` 會以單一詞邊查到「不知道」並排在首位，`ㄓㄉ`、`ㄎㄧㄎ` 也會查到「知道」「可以看」，且 raw 注音仍保留
-- 選擇聲母縮寫候選後刪除會還原原始聲母 tokens
-- coordinator 的 stale result 防護、載入期間保留既有候選、invalidate 與初始化失敗 fallback
-- document effect applier 的 UTF-16 selection、替換 marked text 與提交順序
-- 候選列與展開列表只建立可見範圍的 cell、第一列可見數計算與展開／收合狀態
-- 「注音」在有聲調與無聲調輸入下都出現在 Top 10，且來自單一詞典詞條
-- production 詞典的 metadata、entry count、initial key 完整性、兩份來源 manifest 比對與代表性查詢
-- production lookup 的 `EXPLAIN QUERY PLAN` 確認分別使用 `pronunciation_base_key` 與 `pronunciation_initial_key` 索引
-
-Python 詞典編譯器另有單元測試與完整 corpus 驗證：
-
-```sh
-python3 -m unittest discover \
-  -s Tools/DictionaryCompiler/tests \
-  -t Tools/DictionaryCompiler/tests
-```
-
-## 第三方資料
-
-中文詞庫來自兩份 Rime 資料，皆以 pinned commit 方式鎖定：
-
-- Terra Pinyin：<https://github.com/rime/rime-terra-pinyin>，commit `8a2c895ad7ee8e2b137d91be77f18f86b04d7fc9`
-  - 詞典：<https://raw.githubusercontent.com/rime/rime-terra-pinyin/8a2c895ad7ee8e2b137d91be77f18f86b04d7fc9/terra_pinyin.dict.yaml>
-  - Repository 授權：LGPL-3.0（`Vendor/rime-terra-pinyin/LICENSE`）
-  - 詞典 header 另註明參考 CC-CEDICT，採 CC BY-SA 3.0
-- Rime Essay：<https://github.com/rime/rime-essay>，commit `e2652ea18609a879eae3e87db5d25b7fbc1a4f93`
-  - 詞彙：<https://raw.githubusercontent.com/rime/rime-essay/e2652ea18609a879eae3e87db5d25b7fbc1a4f93/essay.txt>
-  - Repository 授權：LGPL-3.0（`Vendor/rime-essay/LICENSE`）
-
-各 `SOURCE.json` 記錄來源、commit、SHA-256 與取得時間，Essay manifest 另記錄 LICENSE SHA-256 與格式版本；`build` 會驗證 source 與 license 的 SHA-256，`fetch-terra`／`fetch-essay` 只能在明確指定 commit 時使用，一般 build 與 App 執行期都不連網。完整 attribution、修改說明與授權連結見 `THIRD_PARTY_NOTICES.md`；同一份 notices 與上游 LGPL 授權會打包進主 App 及 Keyboard Extension，App 內可從「第三方授權」開啟閱讀。SQLite 衍生資料的 sidecar 授權位於 `Generated/LICENSE.md`。發佈前仍需人工確認最終合規方式。
-
-FlickZhuyin 自有程式碼目前未授予開源授權，repository 根目錄也刻意不包含自有程式碼的 `LICENSE` 檔；第三方材料及衍生詞典的授權如上述，不受影響。
-
-## 詞典編譯
-
-上游資料只在更新來源時以 `fetch-terra`／`fetch-essay` 下載，兩者都必須指定完整的 40 字元 commit：
-
-```sh
-python3 Tools/DictionaryCompiler/compile_dictionary.py fetch-terra \
-  --commit <terra-commit> --dest Vendor/rime-terra-pinyin
-
-python3 Tools/DictionaryCompiler/compile_dictionary.py fetch-essay \
-  --commit <essay-commit> --dest Vendor/rime-essay
-```
-
-重建 production 詞典與 report（不需要網路）：
-
-```sh
-python3 Tools/DictionaryCompiler/compile_dictionary.py build \
-  --terra-source Vendor/rime-terra-pinyin/terra_pinyin.dict.yaml \
-  --terra-manifest Vendor/rime-terra-pinyin/SOURCE.json \
-  --essay-source Vendor/rime-essay/essay.txt \
-  --essay-manifest Vendor/rime-essay/SOURCE.json \
-  --output Generated/flickzhuyin.sqlite3 \
-  --report Generated/dictionary-report.json
-```
-
-編譯器會先編譯 Terra，建立完整詞與單字讀音索引；Essay 詞條優先使用 Terra 明確詞讀音，否則以單字讀音自動組合，每個詞最多保留 16 組讀音，超過上限會在 report 中記錄。合成時會排除該字已有正權重讀音時 Terra 明確標為 `0%` 的讀音，排除的讀音數量記於 report 的 `excludedZeroWeightReadings`；Terra 單字本身的 `0%` 讀音仍會保留在詞典中。Essay 詞頻以 `log1p(frequency) / log1p(max_frequency)` 正規化為 `source_weight`，與 Terra 詞條以 `(text, base_key, tone_key)` 合併；Terra 的讀音權重獨立寫入 `pronunciation_weight`（單字讀音下限 5%，合成詞取各字讀音權重乘積，來源未標權重時為 NULL），Runtime 以兩者相加計分；每個 canonical 讀音另計算 `initial_key`（schema v4），並驗證其分段數等於 `syllable_count`，完整性統計會寫入 report。無法標音的詞條只會統計在 report，格式錯誤或 hash 不符則會讓 build 失敗。report 也會記錄資料庫大小與編譯時間，資料庫大小有硬上限。
-
-在相同 Python 與 SQLite library 版本下，相同 source bytes 與 compiler 版本會產生 byte-for-byte 相同的 SQLite 檔案與 report；不同 SQLite library 版本只保證 schema、metadata、排序後資料內容與 report 相同，不保證 SQLite 實體 page layout 或檔案 hash 相同。編譯耗時不寫入可重現的 report。output 只加入 `FlickZhuyinKeyboard` 的 bundle resources。Swift 測試使用的迷你 fixture 由下列命令產生，Python 測試以 logical database snapshot 檢查它是否與 fixture source 同步：
-
-```sh
-python3 Tools/DictionaryCompiler/compile_dictionary.py build \
-  --terra-source Tools/DictionaryCompiler/tests/fixtures/zhuyin_tests.dict.yaml \
-  --terra-manifest Tools/DictionaryCompiler/tests/fixtures/zhuyin_tests.SOURCE.json \
-  --essay-source Tools/DictionaryCompiler/tests/fixtures/zhuyin_tests.essay.txt \
-  --essay-manifest Tools/DictionaryCompiler/tests/fixtures/zhuyin_tests.essay.SOURCE.json \
-  --output FlickZhuyinTests/Fixtures/flickzhuyin-tests.sqlite3 \
-  --report /tmp/flickzhuyin-fixture-report.json
-```
-
-## 效能
-
-`ChineseInputPerformanceTests` 與 `DecoderPerformanceTests` 是防止演算法或 I/O 發生災難性退化的寬鬆保護，不代表產品延遲目標。Release 模擬器的 Decoder p95 上限為 100 ms，完整 parser → matcher → decoder Pipeline p95 上限為 250 ms；測試直接 assert 全部樣本的 p95，並輸出 min、平均與 p95 供比較。SQLite open、冷／熱查詢、pattern 查詢、parser 與 matcher 也分別設有 Debug／Release 寬鬆門檻，並涵蓋 2、4、8 個連續聲母的 matcher 測試與「每次 pattern query 最多回傳 result limit」的界線。加入 Essay、讀音 provenance 與聲母索引後 production 資料庫約 165 MB（仍在 256 MB 上限內），Extension 啟動仍只把音節 inventory 載入記憶體，詞條查詢維持依 `base_key` 與 `syllable_count`、pattern 查詢依 `initial_key` 與 `syllable_count` 使用索引，掃描量與單次回傳數都有硬上限，pattern 結果與掃描列另有具上限的 LRU cache。
-
-`Generated/flickzhuyin.sqlite3` 是鍵盤執行所需的可重現資源，因此不加入 `.gitignore`；由於檔案超過 GitHub 一般 Git blob 的 100 MB 限制，repository 透過 Git LFS 追蹤它。clone 後需安裝 Git LFS 才能取得完整資料庫。
+- **顯示四方向符號**（預設開啟）：關閉後注音與標點按鍵只顯示中央符號。
+- **選完字後自動提交**（預設開啟）：關閉後需按「確定」提交組字內容。
 
 ## 隱私
 
@@ -260,6 +117,15 @@ FlickZhuyin Keyboard Extension：
 - 不使用雲端同步
 
 開啟 Full Access 會解除 iOS 對第三方鍵盤的部分系統限制，但 FlickZhuyin 不會藉此讀取、儲存或傳送使用者輸入內容。
+
+## 第三方資料與授權
+
+中文詞庫由 Rime Terra Pinyin 與 Rime Essay 兩份上游資料轉換而成：
+
+- Terra Pinyin 詞條與讀音依 CC BY-SA 3.0 提供
+- Rime Essay 詞頻依 LGPL-3.0 提供
+
+完整 attribution、修改說明與授權連結見 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，App 內也可從「第三方授權」閱讀。FlickZhuyin 自有程式碼目前未授予開源授權。
 
 ## 尚未支援
 
