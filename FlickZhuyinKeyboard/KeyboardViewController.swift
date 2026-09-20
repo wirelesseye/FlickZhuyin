@@ -48,11 +48,13 @@ final class KeyboardViewController: UIInputViewController {
     override func textWillChange(_ textInput: UITextInput?) {
         super.textWillChange(textInput)
         handleHostDocumentChange()
+        refreshReturnKeyFace()
     }
 
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
         handleHostDocumentChange()
+        refreshReturnKeyFace()
     }
 
     override func handleInputModeList(from view: UIView, with event: UIEvent) {
@@ -527,15 +529,7 @@ final class KeyboardViewController: UIInputViewController {
                 button.setTitle(nil, for: .normal)
                 button.setImage(nil, for: .normal)
             case .return:
-                if engine.mode == .zhuyin, engine.hasMarkedText {
-                    button.setImage(nil, for: .normal)
-                    button.setTitle("確定", for: .normal)
-                    button.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
-                } else {
-                    button.setTitle(nil, for: .normal)
-                    button.setImage(keyIcon(named: "arrow.turn.down.left"), for: .normal)
-                    button.tintColor = .label
-                }
+                updateReturnKeyFace(button)
             case .modeSwitch:
                 button.setTitle(engine.mode == .zhuyin ? "ABC" : "中", for: .normal)
                 button.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
@@ -565,6 +559,73 @@ final class KeyboardViewController: UIInputViewController {
         switch engine.mode {
         case .zhuyin: heightConstraint?.constant = compact ? 220 : 260
         case .abc: heightConstraint?.constant = compact ? 190 : 230
+        }
+    }
+
+    private func refreshReturnKeyFace() {
+        for (key, button) in keyButtons where key == .return {
+            updateReturnKeyFace(button)
+        }
+    }
+
+    private func updateReturnKeyFace(_ button: KeyboardButton) {
+        let type = textDocumentProxy.returnKeyType
+        if engine.mode == .zhuyin, engine.hasMarkedText {
+            setReturnTitle("確定", on: button)
+            applyReturnKeyAccent(false, on: button)
+            return
+        }
+        if let iconName = returnKeyIconName(for: type) {
+            setReturnIcon(iconName, on: button)
+        } else if let title = returnKeyTitle(for: type) {
+            setReturnTitle(title, on: button)
+        } else {
+            setReturnIcon("arrow.turn.down.left", on: button)
+        }
+        applyReturnKeyAccent(type != nil && type != .default, on: button)
+    }
+
+    private func applyReturnKeyAccent(_ isAccented: Bool, on button: KeyboardButton) {
+        button.normalColor = isAccented ? .systemBlue : KeyboardButton.standardKeyColor
+        let foreground: UIColor = isAccented ? .white : .label
+        button.setTitleColor(foreground, for: .normal)
+        button.tintColor = foreground
+    }
+
+    private func setReturnIcon(_ name: String, on button: KeyboardButton) {
+        button.setTitle(nil, for: .normal)
+        button.setImage(keyIcon(named: name), for: .normal)
+        button.tintColor = .label
+    }
+
+    private func setReturnTitle(_ title: String, on button: KeyboardButton) {
+        button.setImage(nil, for: .normal)
+        button.setTitle(title, for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
+        button.titleLabel?.adjustsFontSizeToFitWidth = true
+        button.titleLabel?.minimumScaleFactor = 0.7
+    }
+
+    private func returnKeyIconName(for type: UIReturnKeyType?) -> String? {
+        switch type {
+        case .default: "arrow.turn.down.left"
+        case .go: "arrow.forward"
+        case .next, .continue: "chevron.forward"
+        case .route: "arrow.triangle.turn.up.right.diamond"
+        case .search: "magnifyingglass"
+        case .send: "paperplane.fill"
+        case .done: "checkmark"
+        case .emergencyCall: "phone.fill"
+        default: nil
+        }
+    }
+
+    private func returnKeyTitle(for type: UIReturnKeyType?) -> String? {
+        switch type {
+        case .join: "加入"
+        case .google: "Google"
+        case .yahoo: "Yahoo"
+        default: nil
         }
     }
 
