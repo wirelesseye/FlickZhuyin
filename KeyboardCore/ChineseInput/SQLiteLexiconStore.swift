@@ -28,10 +28,11 @@ final class SQLiteLexiconStore: LexiconStore, @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.wirelesseye.FlickZhuyin.SQLiteLexiconStore")
     private let database: OpaquePointer
     private let exactStatement: OpaquePointer
-    private let initialStatement: OpaquePointer
+    private let patternStatement: OpaquePointer
     private let inventory: [String]
     private var exactCache: BoundedCache<[SyllableConstraint], [LexiconMatch]>
-    private var initialCache: BoundedCache<InitialMatchRequest, [LexiconMatch]>
+    private var patternCache: BoundedCache<PatternMatchRequest, [LexiconMatch]>
+    private var scanCache: BoundedCache<PatternScanRequest, [ScannedRow]>
 
     init(url: URL, cacheCapacity: Int = SQLiteLexiconStore.defaultCacheCapacity) throws {
         guard FileManager.default.fileExists(atPath: url.path) else {
@@ -57,7 +58,7 @@ final class SQLiteLexiconStore: LexiconStore, @unchecked Sendable {
                 ORDER BY id
                 """
             )
-            initialStatement = try Self.prepare(
+            patternStatement = try Self.prepare(
                 opened,
                 sql: """
                 SELECT text, base_key, tone_key, source_weight
@@ -74,7 +75,8 @@ final class SQLiteLexiconStore: LexiconStore, @unchecked Sendable {
         database = opened
         let capacity = max(1, cacheCapacity)
         exactCache = BoundedCache(capacity: capacity)
-        initialCache = BoundedCache(capacity: capacity)
+        patternCache = BoundedCache(capacity: capacity)
+        scanCache = BoundedCache(capacity: max(8, capacity / 4))
     }
 
     convenience init(
@@ -91,7 +93,7 @@ final class SQLiteLexiconStore: LexiconStore, @unchecked Sendable {
 
     deinit {
         sqlite3_finalize(exactStatement)
-        sqlite3_finalize(initialStatement)
+        sqlite3_finalize(patternStatement)
         sqlite3_close(database)
     }
 
@@ -106,18 +108,29 @@ final class SQLiteLexiconStore: LexiconStore, @unchecked Sendable {
         }
     }
 
-    func initialMatches(for initials: [Character], limit: Int) throws -> [LexiconMatch] {
-        guard !initials.isEmpty, limit > 0 else { return [] }
-        let request = InitialMatchRequest(
-            initialKey: Self.initialKey(for: initials),
-            limit: limit
+    func patternMatches(
+        for patterns: [SyllableMatchPattern],
+        resultLimit: Int,
+        scanLimit: Int
+    ) throws -> [LexiconMatch] {
+        guard !patterns.isEmpty, resultLimit > 0, scanLimit > 0 else { return [] }
+        guard let initialKey = Self.initialKey(for: patterns) else { return [] }
+        let request = PatternMatchRequest(
+            patterns: patterns,
+            resultLimit: resultLimit,
+            scanLimit: scanLimit
         )
         return try queue.sync {
-            if let cached = initialCache.value(for: request) {
+            if let cached = patternCache.value(for: request) {
                 return cached
             }
-            let matches = try performInitialQuery(initials, limit: limit)
-            initialCache.insert(matches, for: request)
+            let rows = try scannedRows(
+                initialKey: initialKey,
+                syllableCount: patterns.count,
+                scanLimit: scanLimit
+            )
+            let matches = Self.matches(from: rows, patterns: patterns, resultLimit: resultLimit)
+            patternCache.insert(matches, for: request)
             return matches
         }
     }
@@ -126,8 +139,14 @@ final class SQLiteLexiconStore: LexiconStore, @unchecked Sendable {
         inventory
     }
 
-    static func initialKey(for initials: [Character]) -> String {
-        initials.map(String.init).joined(separator: "\u{1f}")
+    static func initialKey(for patterns: [SyllableMatchPattern]) -> String? {
+        var components: [String] = []
+        components.reserveCapacity(patterns.count)
+        for pattern in patterns {
+            guard let character = pattern.initialCharacter else { return nil }
+            components.append(String(character))
+        }
+        return components.joined(separator: "\u{1f}")
     }
 
     private func performQuery(_ constraints: [SyllableConstraint]) throws -> [LexiconMatch] {
@@ -189,62 +208,124 @@ final class SQLiteLexiconStore: LexiconStore, @unchecked Sendable {
         return matches
     }
 
-    private func performInitialQuery(_ initials: [Character], limit: Int) throws -> [LexiconMatch] {
-        sqlite3_reset(initialStatement)
-        sqlite3_clear_bindings(initialStatement)
-        let initialKey = Self.initialKey(for: initials)
-        guard sqlite3_bind_text(initialStatement, 1, initialKey, -1, sqliteTransient) == SQLITE_OK,
-              sqlite3_bind_int(initialStatement, 2, Int32(initials.count)) == SQLITE_OK,
-              sqlite3_bind_int(initialStatement, 3, Int32(clamping: limit)) == SQLITE_OK
+    private func scannedRows(
+        initialKey: String,
+        syllableCount: Int,
+        scanLimit: Int
+    ) throws -> [ScannedRow] {
+        let request = PatternScanRequest(
+            initialKey: initialKey,
+            syllableCount: syllableCount,
+            scanLimit: scanLimit
+        )
+        if let cached = scanCache.value(for: request) {
+            return cached
+        }
+        let rows = try performPatternScan(request)
+        scanCache.insert(rows, for: request)
+        return rows
+    }
+
+    private static func matches(
+        from rows: [ScannedRow],
+        patterns: [SyllableMatchPattern],
+        resultLimit: Int
+    ) -> [LexiconMatch] {
+        var matches: [LexiconMatch] = []
+        matches.reserveCapacity(min(resultLimit, rows.count))
+        for row in rows {
+            guard row.bases.count == patterns.count else { continue }
+            var accepted = true
+            for index in patterns.indices {
+                guard case let .exact(constraint) = patterns[index] else { continue }
+                guard row.bases[index] == constraint.base else {
+                    accepted = false
+                    break
+                }
+                if let tone = constraint.tone, tone != row.tones[index] {
+                    accepted = false
+                    break
+                }
+            }
+            guard accepted else { continue }
+            var pronunciation: [CanonicalSyllable] = []
+            pronunciation.reserveCapacity(patterns.count)
+            for index in patterns.indices {
+                pronunciation.append(
+                    CanonicalSyllable(base: row.bases[index], tone: row.tones[index])
+                )
+            }
+            matches.append(
+                LexiconMatch(
+                    text: row.text,
+                    pronunciation: pronunciation,
+                    sourceWeight: row.sourceWeight
+                )
+            )
+            if matches.count == resultLimit {
+                break
+            }
+        }
+        return matches
+    }
+
+    private func performPatternScan(_ request: PatternScanRequest) throws -> [ScannedRow] {
+        sqlite3_reset(patternStatement)
+        sqlite3_clear_bindings(patternStatement)
+        guard sqlite3_bind_text(patternStatement, 1, request.initialKey, -1, sqliteTransient) == SQLITE_OK,
+              sqlite3_bind_int(patternStatement, 2, Int32(request.syllableCount)) == SQLITE_OK,
+              sqlite3_bind_int(patternStatement, 3, Int32(clamping: request.scanLimit)) == SQLITE_OK
         else {
             throw Self.queryError(database)
         }
-        var matches: [LexiconMatch] = []
+        var rows: [ScannedRow] = []
         while true {
-            let step = sqlite3_step(initialStatement)
+            let step = sqlite3_step(patternStatement)
             if step == SQLITE_DONE {
                 break
             }
             guard step == SQLITE_ROW else {
                 throw Self.queryError(database)
             }
-            guard let textPointer = sqlite3_column_text(initialStatement, 0),
-                  let basePointer = sqlite3_column_text(initialStatement, 1),
-                  let tonePointer = sqlite3_column_text(initialStatement, 2)
+            guard let textPointer = sqlite3_column_text(patternStatement, 0),
+                  let basePointer = sqlite3_column_text(patternStatement, 1),
+                  let tonePointer = sqlite3_column_text(patternStatement, 2)
             else {
-                throw LexiconStoreError.queryFailed("initial match row contains NULL text, base_key or tone_key")
+                throw LexiconStoreError.queryFailed("pattern match row contains NULL text, base_key or tone_key")
             }
             let bases = String(cString: basePointer)
                 .split(separator: "\u{1f}", omittingEmptySubsequences: false)
+                .map(String.init)
             let toneKey = String(cString: tonePointer)
-            guard bases.count == initials.count, toneKey.count == initials.count else {
-                throw LexiconStoreError.queryFailed("initial match row does not match its initial key")
+            guard bases.count == request.syllableCount, toneKey.count == request.syllableCount else {
+                throw LexiconStoreError.queryFailed("pattern match row does not match its initial key")
             }
-            var pronunciation: [CanonicalSyllable] = []
-            pronunciation.reserveCapacity(initials.count)
+            var tones: [MandarinTone] = []
+            tones.reserveCapacity(request.syllableCount)
             var toneIndex = toneKey.startIndex
-            for base in bases {
+            for _ in 0..<request.syllableCount {
                 guard let tone = MandarinTone(digit: toneKey[toneIndex]) else {
                     throw LexiconStoreError.queryFailed("tone_key contains a digit outside 1...5")
                 }
-                pronunciation.append(CanonicalSyllable(base: String(base), tone: tone))
+                tones.append(tone)
                 toneIndex = toneKey.index(after: toneIndex)
             }
             let weight: Double?
-            if sqlite3_column_type(initialStatement, 3) == SQLITE_NULL {
+            if sqlite3_column_type(patternStatement, 3) == SQLITE_NULL {
                 weight = nil
             } else {
-                weight = sqlite3_column_double(initialStatement, 3)
+                weight = sqlite3_column_double(patternStatement, 3)
             }
-            matches.append(
-                LexiconMatch(
+            rows.append(
+                ScannedRow(
                     text: String(cString: textPointer),
-                    pronunciation: pronunciation,
+                    bases: bases,
+                    tones: tones,
                     sourceWeight: weight
                 )
             )
         }
-        return matches
+        return rows
     }
 
     private static func validateSchema(_ database: OpaquePointer) throws {
@@ -355,38 +436,96 @@ final class SQLiteLexiconStore: LexiconStore, @unchecked Sendable {
     }
 }
 
-private struct InitialMatchRequest: Hashable {
+private struct PatternMatchRequest: Hashable {
+    let patterns: [SyllableMatchPattern]
+    let resultLimit: Int
+    let scanLimit: Int
+}
+
+private struct PatternScanRequest: Hashable {
     let initialKey: String
-    let limit: Int
+    let syllableCount: Int
+    let scanLimit: Int
+}
+
+private struct ScannedRow {
+    let text: String
+    let bases: [String]
+    let tones: [MandarinTone]
+    let sourceWeight: Double?
 }
 
 private struct BoundedCache<Key: Hashable, Value> {
+    private final class Entry {
+        let key: Key
+        var value: Value
+        var newer: Entry?
+        var older: Entry?
+
+        init(key: Key, value: Value) {
+            self.key = key
+            self.value = value
+        }
+    }
+
     let capacity: Int
-    private var storage: [Key: Value] = [:]
-    private var order: [Key] = []
+    private var storage: [Key: Entry] = [:]
+    private var newest: Entry?
+    private var oldest: Entry?
 
     init(capacity: Int) {
         self.capacity = max(1, capacity)
     }
 
     mutating func value(for key: Key) -> Value? {
-        guard let value = storage[key] else { return nil }
-        touch(key)
-        return value
+        guard let entry = storage[key] else { return nil }
+        moveToNewest(entry)
+        return entry.value
     }
 
     mutating func insert(_ value: Value, for key: Key) {
-        storage[key] = value
-        touch(key)
-        while order.count > capacity, !order.isEmpty {
-            storage.removeValue(forKey: order.removeFirst())
+        if let entry = storage[key] {
+            entry.value = value
+            moveToNewest(entry)
+            return
+        }
+        let entry = Entry(key: key, value: value)
+        storage[key] = entry
+        appendNewest(entry)
+        while storage.count > capacity, let evicted = oldest {
+            detach(evicted)
+            storage.removeValue(forKey: evicted.key)
         }
     }
 
-    private mutating func touch(_ key: Key) {
-        if let index = order.firstIndex(of: key) {
-            order.remove(at: index)
+    private mutating func moveToNewest(_ entry: Entry) {
+        guard newest !== entry else { return }
+        detach(entry)
+        appendNewest(entry)
+    }
+
+    private mutating func appendNewest(_ entry: Entry) {
+        entry.newer = nil
+        entry.older = newest
+        newest?.newer = entry
+        newest = entry
+        if oldest == nil {
+            oldest = entry
         }
-        order.append(key)
+    }
+
+    private mutating func detach(_ entry: Entry) {
+        let older = entry.older
+        let newer = entry.newer
+        older?.newer = newer
+        newer?.older = older
+        if oldest === entry {
+            oldest = newer
+        }
+        if newest === entry {
+            newest = older
+        }
+        entry.older = nil
+        entry.newer = nil
     }
 }

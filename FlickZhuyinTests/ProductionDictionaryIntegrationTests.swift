@@ -88,9 +88,9 @@ final class ProductionDictionaryIntegrationTests: XCTestCase {
         XCTAssertTrue(nihao.contains { $0.text == "你好" && $0.sourceWeight != nil })
     }
 
-    func testInitialQueriesReturnFullPronunciations() throws {
+    func testPatternQueriesReturnFullPronunciations() throws {
         let store = try SQLiteLexiconStore(url: databaseURL)
-        let single = try store.initialMatches(for: ["ㄅ"], limit: 64)
+        let single = try store.patternMatches(for: [.initial("ㄅ")], resultLimit: 64, scanLimit: 2048)
         XCTAssertTrue(single.contains { $0.text == "不" })
         for match in single {
             XCTAssertEqual(match.pronunciation.count, 1)
@@ -98,19 +98,48 @@ final class ProductionDictionaryIntegrationTests: XCTestCase {
         }
         XCTAssertLessThanOrEqual(single.count, 64)
         XCTAssertTrue(
-            try store.initialMatches(for: ["ㄅ"], limit: 64).map(\.text)
+            try store.patternMatches(for: [.initial("ㄅ")], resultLimit: 64, scanLimit: 2048).map(\.text)
                 == single.map(\.text)
         )
 
-        let double = try store.initialMatches(for: ["ㄅ", "ㄅ"], limit: 64)
+        let double = try store.patternMatches(
+            for: [.initial("ㄅ"), .initial("ㄅ")],
+            resultLimit: 64,
+            scanLimit: 2048
+        )
         XCTAssertTrue(double.contains { $0.text == "爸爸" })
         for match in double {
             XCTAssertEqual(match.pronunciation.count, 2)
             XCTAssertTrue(match.pronunciation.allSatisfy { $0.base.first == "ㄅ" })
         }
-        let limited = try store.initialMatches(for: ["ㄅ", "ㄅ"], limit: 3)
+        let limited = try store.patternMatches(
+            for: [.initial("ㄅ"), .initial("ㄅ")],
+            resultLimit: 3,
+            scanLimit: 2048
+        )
         XCTAssertEqual(limited.count, 3)
         XCTAssertEqual(limited.map(\.text), Array(double.prefix(3).map(\.text)))
+    }
+
+    func testMixedPatternQueriesFilterWithinInitialBucket() throws {
+        let store = try SQLiteLexiconStore(url: databaseURL)
+        let patterns: [SyllableMatchPattern] = [
+            .exact(SyllableConstraint(base: "ㄅㄨ")),
+            .exact(SyllableConstraint(base: "ㄓ")),
+            .initial("ㄉ"),
+        ]
+        let matches = try store.patternMatches(for: patterns, resultLimit: 64, scanLimit: 2048)
+        XCTAssertTrue(matches.contains { $0.text == "不知道" })
+        XCTAssertTrue(matches.contains { $0.text == "不值得" })
+        XCTAssertFalse(matches.contains { $0.text == "爆炸的" })
+        XCTAssertFalse(matches.contains { $0.text == "不正當" })
+        XCTAssertFalse(matches.contains { $0.text == "捕捉到" })
+        for match in matches {
+            XCTAssertEqual(match.pronunciation.count, 3)
+            XCTAssertEqual(match.pronunciation[0].base, "ㄅㄨ")
+            XCTAssertEqual(match.pronunciation[1].base, "ㄓ")
+            XCTAssertEqual(match.pronunciation[2].base.first, "ㄉ")
+        }
     }
 
     func testInitialKeyRowsAreConsistent() throws {

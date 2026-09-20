@@ -10,6 +10,47 @@ struct SyllableConstraint: Hashable, Sendable {
     }
 }
 
+enum SyllableMatchPattern: Hashable, Sendable {
+    case exact(SyllableConstraint)
+    case initial(Character)
+
+    var isExact: Bool {
+        if case .exact = self {
+            return true
+        }
+        return false
+    }
+
+    var exactConstraint: SyllableConstraint? {
+        if case let .exact(constraint) = self {
+            return constraint
+        }
+        return nil
+    }
+
+    var initialCharacter: Character? {
+        switch self {
+        case let .exact(constraint):
+            return constraint.base.first
+        case let .initial(character):
+            return character
+        }
+    }
+
+    func accepts(base: String, tone: MandarinTone) -> Bool {
+        switch self {
+        case let .exact(constraint):
+            guard base == constraint.base else { return false }
+            if let expected = constraint.tone, expected != tone {
+                return false
+            }
+            return true
+        case let .initial(character):
+            return base.first == character
+        }
+    }
+}
+
 struct LexiconMatch: Equatable, Sendable {
     let text: String
     let pronunciation: [CanonicalSyllable]
@@ -18,7 +59,11 @@ struct LexiconMatch: Equatable, Sendable {
 
 protocol LexiconStore: Sendable {
     func exactMatches(for syllables: [SyllableConstraint]) throws -> [LexiconMatch]
-    func initialMatches(for initials: [Character], limit: Int) throws -> [LexiconMatch]
+    func patternMatches(
+        for patterns: [SyllableMatchPattern],
+        resultLimit: Int,
+        scanLimit: Int
+    ) throws -> [LexiconMatch]
     func syllableInventory() throws -> [String]
 }
 

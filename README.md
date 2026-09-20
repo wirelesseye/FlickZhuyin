@@ -11,7 +11,7 @@ FlickZhuyin 是一個實驗性的 iOS 自訂注音鍵盤，使用類似日文假
 - Inline 組字：宿主輸入框即時顯示已選字與未選注音
 - 最多 30 個漢字／注音候選，可點選組字
 - 候選列右側的箭頭按鈕可展開候選網格，一次瀏覽更多候選；展開時按鍵區會暫時隱藏
-- 聲母縮寫候選：`ㄅ`、`ㄅㄅ` 等尚未構成完整音節的聲母輸入也能查得漢字候選
+- 聲母縮寫與混合候選：`ㄅ`、`ㄅㄅ`、`ㄅㄨㄓㄉ` 等輸入可混用完整音節與單符號縮寫，查得「不知道」這類完整詞條
 - 第一至第四聲 Flick 選擇
 - 獨立輕聲鍵
 - Shift、Caps Lock、刪除、空白與 Return
@@ -85,8 +85,9 @@ FlickZhuyin 是一個實驗性的 iOS 自訂注音鍵盤，使用類似日文假
 - 候選只查詢游標前的未選注音音節串：以方向鍵把游標移到 `ㄓㄨˋ` 之後，候選列只出現 `ㄓㄨˋ` 的候選；長按方向鍵可連續移動游標；選字後游標移至 composition 結尾，並接著查詢剩下的未選音節。
 - 點擊候選會把文字加入 composition，並保留產生它的注音；可繼續輸入下一段，不會提前結束組字。
 - 選完所有未選音節後：預設（App 的「選完字後自動提交」開啟）會直接提交 composition；關閉時維持 marked text，需按 Return／「確定」才提交。
-- 只輸入聲母時（例如 `ㄅ`、`ㄅㄅ`），候選列以詞典回傳的完整讀音提供漢字候選；完整注音候選仍優先於聲母縮寫候選，raw 注音一律保留。
-- 第一版聲母縮寫只接受固定的注音聲母集合，且只比對「每個音節的第一個聲母」；不支援任意音節前綴（例如 `ㄅㄧ` 不會擴張成 `ㄅㄧㄝ`），`ㄧ`、`ㄨ`、`ㄩ`、`ㄦ` 也不視為聲母。連續聲母的查詢數量有上限，不會指數成長。
+- 只輸入聲母時（例如 `ㄅ`、`ㄅㄅ`），候選列以詞典回傳的完整讀音提供漢字候選；完整注音候選仍優先於縮寫候選，raw 注音一律保留。
+- 同一個多字詞可以混用完整音節與單符號縮寫（例如 `ㄅㄨㄓㄉ` 會查到「不知道」）。單符號縮寫包含尚未構成完整音節的聲母，以及 `ㄧ`、`ㄨ`、`ㄩ`、`ㄦ` 等完整單符號音節；當同一位置已有更長的完整音節時（例如輸入了 `ㄨㄛ`），該符號不再另外解讀為縮寫。
+- 仍不支援任意音節前綴（例如 `ㄅㄧ` 不會擴張成 `ㄅㄧㄝ`）。pattern 查詢有回傳上限與掃描上限，不會無界掃描。
 - 有未選注音時，中央按鍵是聲調鍵；只有已選文字時，中央按鍵是一般空白鍵。
 - Return 會提交 composition（提交組字內容，不插入換行）；尚未選字的注音會原樣提交。組字中顯示「確定」；其餘情況跟隨宿主輸入框的 `returnKeyType`：有對應 SF Symbol 時顯示圖示（搜尋、傳送、完成、路線、緊急通話、前往、下一項、繼續），沒有圖示的類型顯示文字（Google、Yahoo、加入）；`returnKeyType` 為 default 或無法讀取時顯示換行圖示。`returnKeyType` 非 default 時，按鍵背景使用 `UIColor.systemBlue`、前景為白色；組字中的「確定」與 default 狀態維持標準按鍵外觀。
 - 空白鍵不提交有組字內容的 composition；沒有組字內容時才會輸入空白。
@@ -129,15 +130,15 @@ Generated/                     編譯產物（SQLite 詞典與 report）
 中文輸入核心位於 `KeyboardCore/ChineseInput/`：
 
 - `SyllableParser` 從詞庫的合法音節清單建立音節格（syllable lattice），支援省略聲調、部分聲調與完整聲調；可同時作為完整音節與聲母前綴的符號（例如 `ㄓ`）會產生完整與聲母縮寫兩條 edge。
-- `SQLiteLexiconStore` 以唯讀模式開啟 bundle 內的 SQLite 詞典，只把 400 多個合法無調注音載入記憶體，完整注音查詢與聲母查詢都按需求走索引，且各自有具上限的 cache。
-- `DictionaryMatcher` 沿音節格查詢詞庫，產生可含多詞、多讀音的詞格；完整音節 expansion 與聲母縮寫 expansion 分開記憶化，聲母查詢受 `initialMatchLimit` 限制，不做 `5^n` 聲調展開。
+- `SQLiteLexiconStore` 以唯讀模式開啟 bundle 內的 SQLite 詞典，只把 400 多個合法無調注音載入記憶體。完整注音查詢走 `base_key`，pattern（exact／initial 混合）查詢由 pattern 推導 `initial_key` 後走索引掃描，掃描量受 scan limit 限制，再逐列套用 exact 條件並在收集滿 result limit 後停止；三種查詢各有具上限的 LRU cache。
+- `DictionaryMatcher` 沿音節格以統一的 pattern expansion 查詢詞庫：完整 edge 產生 `.exact`、單符號無調 edge 產生 `.initial`，同一位置可同時保留兩種解讀，全部 exact 時仍走快速 `exactMatches`；pattern 與查詢結果都會記憶化，混合查詢受 `patternMatchResultLimit`／`patternMatchScanLimit` 限制。
 - `Decoder` 將詞格與 raw 注音音節合併成永遠連通的解碼圖，以精確 Top-K DAG 動態規劃輸出穩定排序的候選；沒有詞典匹配的片段會以原始注音保留。
 - `LexiconChineseInputPipeline` 在初始化時建立並長期持有 store、parser、matcher 與 decoder，把 Top-K 結果轉成精簡的 `InputCandidate`；轉換時依文字合併候選、每組保留分數最低者，raw 注音候選不受合併影響，並在必要時補上 raw 注音候選。
 - 排序由可替換的 `DecoderScorer` 負責，目前 `BaselineDecoderScorer` 只使用稀疏的 Rime `sourceWeight`、parser cost 與簡易分詞懲罰，不是完整的語言模型排序。
 
 `FlickZhuyinKeyboard/ChineseInputCoordinator.swift` 負責非同步協調：每次 pending tokens 改變就增加 revision、先發布 raw fallback，背景完成後只在 revision 與 token snapshot 都相符時套用結果；`KeyboardDocumentClient` 與 `DocumentEffectApplier` 隔離 `UITextDocumentProxy`，`CandidateBarView` 提供固定高度的水平候選列與展開按鈕，`ExpandedCandidateView` 提供展開後的候選列表，選項依原寬度自動換行排列。
 
-pinned Terra 詞典經過碼表最小化，常見詞如「注音」「你好」原本屬於 Rime 的 preset vocabulary，未包含在 `terra_pinyin.dict.yaml` 中。編譯器改以 pinned Rime Essay 補齊這些常用詞：Terra 提供字音、多音字與明確詞條，Essay 提供常用詞與詞頻；沒有 Terra 明確讀音的 Essay 詞條會以各字的 Terra 單字讀音離線自動標音。合併後的 SQLite 以 `(text, base_key, tone_key)` 為唯一鍵，Essay 詞頻經 log1p 正規化為 `source_weight`，因此「注音」「你好」等詞是帶權重的單一詞條，而不是多個無權重單字臨時拼接。schema v3 另為每個 canonical 讀音寫入 `initial_key`（每個音節第一個注音符號，以 U+001F 分隔）並建立 `pronunciation_initial_key` 索引，供聲母縮寫候選等值查詢。無法標音或超過組合上限的詞條會統計在編譯報告中，不會靜默遺失。
+pinned Terra 詞典經過碼表最小化，常見詞如「注音」「你好」原本屬於 Rime 的 preset vocabulary，未包含在 `terra_pinyin.dict.yaml` 中。編譯器改以 pinned Rime Essay 補齊這些常用詞：Terra 提供字音、多音字與明確詞條，Essay 提供常用詞與詞頻；沒有 Terra 明確讀音的 Essay 詞條會以各字的 Terra 單字讀音離線自動標音。合併後的 SQLite 以 `(text, base_key, tone_key)` 為唯一鍵，Essay 詞頻經 log1p 正規化為 `source_weight`，因此「注音」「你好」等詞是帶權重的單一詞條，而不是多個無權重單字臨時拼接。schema v3 另為每個 canonical 讀音寫入 `initial_key`（每個音節第一個注音符號，以 U+001F 分隔）並建立 `pronunciation_initial_key` 索引，供聲母縮寫與完整／縮寫混合的 pattern 查詢等值掃描。無法標音或超過組合上限的詞條會統計在編譯報告中，不會靜默遺失。
 
 ## 建置與測試
 
@@ -164,10 +165,11 @@ xcodebuild \
 - 音調鍵顯示只依 pending tokens
 - SQLite 詞庫查詢（完整聲調、省略聲調、混合聲調、輕聲、多音字）
 - 音節格切分、incomplete/fallback 連通性、完整／聲母縮寫雙重解讀與 eligible edge 判定
-- 詞格的多字詞、去重、展開上限，以及 initial lookup 的記憶化、查詢上限與 exact/initial 去重
+- 詞格的多字詞、去重、展開上限，以及 pattern lookup 的記憶化、result／scan limit、cheapest-segmentation 去重與 exact/initial 去重
 - decoder 的 scoring、lattice 驗證、Top-K 限制、去重與 deterministic tie-break
 - pipeline 的 fixture 與 production 候選、同文字候選合併、raw fallback 保留、空輸入與錯誤傳遞
 - `ㄅ`、`ㄅㄅ` 的漢字候選、exact 候選優先於聲母縮寫候選、高頻縮寫候選優先與 raw 注音保留
+- 混合完整音節與縮寫的 `ㄅㄨㄓㄉ` 會以單一詞邊查到「不知道」並排在首位，`ㄓㄉ`、`ㄎㄧㄎ` 也會查到「知道」「可以看」，且 raw 注音仍保留
 - 選擇聲母縮寫候選後刪除會還原原始聲母 tokens
 - coordinator 的 stale result 防護、invalidate 與初始化失敗 fallback
 - document effect applier 的 UTF-16 selection、替換 marked text 與提交順序
@@ -239,7 +241,7 @@ python3 Tools/DictionaryCompiler/compile_dictionary.py build \
 
 ## 效能
 
-`ChineseInputPerformanceTests` 與 `DecoderPerformanceTests` 是防止演算法或 I/O 發生災難性退化的寬鬆保護，不代表產品延遲目標。Release 模擬器的 Decoder p95 上限為 100 ms，完整 parser → matcher → decoder Pipeline p95 上限為 250 ms；測試直接 assert 全部樣本的 p95，並輸出 min、平均與 p95 供比較。SQLite open、冷／熱查詢、聲母縮寫查詢、parser 與 matcher 也分別設有 Debug／Release 寬鬆門檻，並涵蓋 2、4、8 個連續聲母的 matcher 測試與「每次 initial query 最多回傳 limit」的界線。加入 Essay、讀音 provenance 與聲母索引後 production 資料庫約 174 MB（仍在 256 MB 上限內），Extension 啟動仍只把音節 inventory 載入記憶體，詞條查詢維持依 `base_key` 與 `syllable_count`、聲母查詢依 `initial_key` 與 `syllable_count` 使用索引，單次查詢回傳數有硬上限。
+`ChineseInputPerformanceTests` 與 `DecoderPerformanceTests` 是防止演算法或 I/O 發生災難性退化的寬鬆保護，不代表產品延遲目標。Release 模擬器的 Decoder p95 上限為 100 ms，完整 parser → matcher → decoder Pipeline p95 上限為 250 ms；測試直接 assert 全部樣本的 p95，並輸出 min、平均與 p95 供比較。SQLite open、冷／熱查詢、pattern 查詢、parser 與 matcher 也分別設有 Debug／Release 寬鬆門檻，並涵蓋 2、4、8 個連續聲母的 matcher 測試與「每次 pattern query 最多回傳 result limit」的界線。加入 Essay、讀音 provenance 與聲母索引後 production 資料庫約 174 MB（仍在 256 MB 上限內），Extension 啟動仍只把音節 inventory 載入記憶體，詞條查詢維持依 `base_key` 與 `syllable_count`、pattern 查詢依 `initial_key` 與 `syllable_count` 使用索引，掃描量與單次回傳數都有硬上限，pattern 結果與掃描列另有具上限的 LRU cache。
 
 `Generated/flickzhuyin.sqlite3` 是鍵盤執行所需的可重現資源，因此不加入 `.gitignore`；由於檔案超過 GitHub 一般 Git blob 的 100 MB 限制，repository 透過 Git LFS 追蹤它。clone 後需安裝 Git LFS 才能取得完整資料庫。
 
@@ -259,7 +261,7 @@ FlickZhuyin Keyboard Extension：
 ## 尚未支援
 
 - 任意音節前綴匹配（例如以 `ㄅㄧ` 查詢 `ㄅㄧㄝ`）
-- 同一個多字詞查詢中混合完整音節與聲母縮寫 constraints
+- 縮寫比例的成本調整；多個縮寫音節的詞（例如 `ㄨㄓㄉ` 的「我知道」）目前會排在首音節完整輸入的詞之後
 - bigram／語言模型排序與自動選字
 - 使用者詞典、學習與持久化
 - 簡繁轉換

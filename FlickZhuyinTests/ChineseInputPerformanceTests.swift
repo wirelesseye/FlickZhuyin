@@ -61,28 +61,35 @@ final class ChineseInputPerformanceTests: XCTestCase {
         XCTAssertLessThan(percentile95(durations), maximumColdLookupP95)
     }
 
-    func testColdCacheInitialLookupLatency() throws {
+    func testColdCachePatternLookupLatency() throws {
         let store = try SQLiteLexiconStore(url: databaseURL, cacheCapacity: 1)
-        let initials: [[Character]] = [
-            ["ㄅ"], ["ㄆ"], ["ㄇ"], ["ㄈ"], ["ㄉ"], ["ㄊ"], ["ㄋ"], ["ㄌ"], ["ㄓ"], ["ㄕ"],
+        let patterns: [[SyllableMatchPattern]] = [
+            [.initial("ㄅ")], [.initial("ㄆ")], [.initial("ㄇ")], [.initial("ㄈ")], [.initial("ㄉ")],
+            [.initial("ㄊ")], [.initial("ㄋ")], [.initial("ㄌ")], [.initial("ㄓ")], [.initial("ㄕ")],
+            [.exact(SyllableConstraint(base: "ㄅㄨ")), .initial("ㄉ")],
+            [.exact(SyllableConstraint(base: "ㄓ")), .initial("ㄉ")],
         ]
         var durations: [TimeInterval] = []
         for index in 0..<200 {
-            let query = initials[index % initials.count]
-            durations.append(try measure { _ = try store.initialMatches(for: query, limit: 64) })
+            let query = patterns[index % patterns.count]
+            durations.append(
+                try measure {
+                    _ = try store.patternMatches(for: query, resultLimit: 64, scanLimit: 2048)
+                }
+            )
         }
         durations.sort()
         print(
-            "PERF cold-cache initial lookup average: \(milliseconds(average(durations))) ms, "
+            "PERF cold-cache pattern lookup average: \(milliseconds(average(durations))) ms, "
                 + "p50: \(milliseconds(durations[100])) ms, p95: \(milliseconds(durations[190])) ms"
         )
         XCTAssertLessThan(percentile95(durations), maximumColdLookupP95)
     }
 
-    func testInitialQueryHonorsLimit() throws {
+    func testPatternQueryHonorsLimit() throws {
         let store = try SQLiteLexiconStore(url: databaseURL)
         for limit in [1, 5, 64] {
-            let matches = try store.initialMatches(for: ["ㄅ"], limit: limit)
+            let matches = try store.patternMatches(for: [.initial("ㄅ")], resultLimit: limit, scanLimit: 2048)
             XCTAssertLessThanOrEqual(matches.count, limit)
         }
     }

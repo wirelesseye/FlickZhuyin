@@ -580,6 +580,20 @@ final class DecoderFixtureIntegrationTests: ChineseInputTestCase {
         }
     }
 
+    func testMixedFullAndAbbreviatedSyllablesProduceSingleWord() throws {
+        let tokens = tokens("ㄋㄧㄏ")
+        let candidates = try decode(tokens)
+        let nihao = try XCTUnwrap(candidates.first { $0.text == "你好" })
+        XCTAssertEqual(nihao.segments.count, 1)
+        guard case let .word(edge)? = nihao.segments.first else {
+            return XCTFail("expected 你好 to come from a dictionary word edge")
+        }
+        XCTAssertEqual(edge.tokenRange, 0..<3)
+        XCTAssertEqual(edge.pronunciation.count, 2)
+        XCTAssertEqual(edge.syllableEdges.map(\.completeness), [.complete, .incomplete])
+        XCTAssertEqual(edge.syllableEdges.map(\.parserCost), [0, SyllableParser.incompleteCost])
+    }
+
 }
 
 final class DecoderProductionIntegrationTests: XCTestCase {
@@ -714,5 +728,65 @@ final class DecoderProductionIntegrationTests: XCTestCase {
         for candidate in candidates {
             assertSegmentsCover(candidate, tokenCount: tokens.count)
         }
+    }
+
+    func testMixedInputProducesSingleWordEdge() throws {
+        let tokens: [ZhuyinInputToken] = [.symbol("ㄅ"), .symbol("ㄨ"), .symbol("ㄓ"), .symbol("ㄉ")]
+        let candidates = try decode(tokens)
+        XCTAssertEqual(candidates.first?.text, "不知道")
+        let buZhiDao = try XCTUnwrap(candidates.first { $0.text == "不知道" })
+        XCTAssertEqual(buZhiDao.segments.count, 1)
+        guard case let .word(edge)? = buZhiDao.segments.first else {
+            return XCTFail("expected 不知道 to come from a single dictionary word edge")
+        }
+        XCTAssertEqual(edge.tokenRange, 0..<4)
+        XCTAssertEqual(edge.pronunciation.map(\.base), ["ㄅㄨ", "ㄓ", "ㄉㄠ"])
+        XCTAssertEqual(edge.syllableEdges.map(\.completeness), [.complete, .complete, .incomplete])
+        XCTAssertEqual(
+            edge.syllableEdges.map(\.parserCost),
+            [0, 0, SyllableParser.incompleteCost]
+        )
+    }
+
+    func testZhuyinDProducesSingleWordEdge() throws {
+        let candidates = try decode(tokens("ㄓㄉ"))
+        let zhiDao = try XCTUnwrap(candidates.first { $0.text == "知道" })
+        guard case let .word(edge)? = zhiDao.segments.first else {
+            return XCTFail("expected 知道 to come from a dictionary word edge")
+        }
+        XCTAssertEqual(edge.tokenRange, 0..<2)
+        XCTAssertEqual(edge.syllableEdges.map(\.completeness), [.complete, .incomplete])
+    }
+
+    func testVowelPrefixProducesSingleWordEdge() throws {
+        let store = try SQLiteLexiconStore(url: databaseURL)
+        let parser = try SyllableParser(store: store)
+        let matcher = DictionaryMatcher(store: store)
+        let tokens: [ZhuyinInputToken] = [.symbol("ㄨ"), .symbol("ㄓ"), .symbol("ㄉ")]
+        let syllableLattice = parser.lattice(for: tokens)
+        let wordLattice = try matcher.buildLattice(from: syllableLattice)
+        let woZhiDao = try XCTUnwrap(wordLattice.outgoingEdges[0].first { $0.text == "我知道" })
+        XCTAssertEqual(woZhiDao.tokenRange, 0..<3)
+        XCTAssertEqual(woZhiDao.pronunciation.map(\.base), ["ㄨㄛ", "ㄓ", "ㄉㄠ"])
+        XCTAssertEqual(
+            woZhiDao.syllableEdges.map(\.completeness),
+            [.incomplete, .complete, .incomplete]
+        )
+        // 我知道 abbreviates two syllables (ㄨ→ㄨㄛ and ㄉ→ㄉㄠ), so it scores below
+        // words whose first syllable is exactly ㄨ (for example 物質的). Recall is the
+        // part this change guarantees; ranking it higher needs scorer work.
+    }
+
+    func testKeYiKanProducesSingleWordEdge() throws {
+        let candidates = try decode(tokens("ㄎㄧㄎ"))
+        let keYiKan = try XCTUnwrap(candidates.first { $0.text == "可以看" })
+        guard case let .word(edge)? = keYiKan.segments.first else {
+            return XCTFail("expected 可以看 to come from a dictionary word edge")
+        }
+        XCTAssertEqual(edge.tokenRange, 0..<3)
+        XCTAssertEqual(
+            edge.syllableEdges.map(\.completeness),
+            [.incomplete, .complete, .incomplete]
+        )
     }
 }

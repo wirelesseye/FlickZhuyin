@@ -433,6 +433,34 @@ final class ChineseInputPipelineTests: ChineseInputTestCase {
         XCTAssertLessThanOrEqual(candidates.count, Decoder().configuration.maximumCandidates)
     }
 
+    func testProductionMixedFullAndAbbreviatedInputPrefersWholeWord() async throws {
+        let pipeline = try LexiconChineseInputPipeline(
+            store: try SQLiteLexiconStore(url: productionDatabaseURL)
+        )
+        let tokens: [ZhuyinInputToken] = [.symbol("ㄅ"), .symbol("ㄨ"), .symbol("ㄓ"), .symbol("ㄉ")]
+        let candidates = try await pipeline.candidates(for: tokens)
+        XCTAssertEqual(candidates.first?.text, "不知道")
+        XCTAssertTrue(candidates.contains { $0.isRawFallback && $0.text == "ㄅㄨㄓㄉ" })
+        XCTAssertLessThanOrEqual(candidates.count, Decoder().configuration.maximumCandidates)
+    }
+
+    func testProductionZhuyinDRecallsZhidao() async throws {
+        let pipeline = try LexiconChineseInputPipeline(
+            store: try SQLiteLexiconStore(url: productionDatabaseURL)
+        )
+        let candidates = try await pipeline.candidates(for: [.symbol("ㄓ"), .symbol("ㄉ")])
+        XCTAssertTrue(candidates.prefix(3).contains { $0.text == "知道" })
+    }
+
+    func testProductionKeYiKanCombinesVowelAndInitials() async throws {
+        let pipeline = try LexiconChineseInputPipeline(
+            store: try SQLiteLexiconStore(url: productionDatabaseURL)
+        )
+        let tokens: [ZhuyinInputToken] = [.symbol("ㄎ"), .symbol("ㄧ"), .symbol("ㄎ")]
+        let candidates = try await pipeline.candidates(for: tokens)
+        XCTAssertTrue(candidates.prefix(3).contains { $0.text == "可以看" })
+    }
+
     func testProductionPipelineFindsZhuyinWithAndWithoutTones() async throws {
         let pipeline = try LexiconChineseInputPipeline(
             store: try SQLiteLexiconStore(url: productionDatabaseURL)
@@ -541,8 +569,12 @@ private final class FailingLexiconStore: LexiconStore, @unchecked Sendable {
         throw LexiconStoreError.queryFailed("unexpected query")
     }
 
-    func initialMatches(for initials: [Character], limit: Int) throws -> [LexiconMatch] {
-        throw LexiconStoreError.queryFailed("unexpected initial query")
+    func patternMatches(
+        for patterns: [SyllableMatchPattern],
+        resultLimit: Int,
+        scanLimit: Int
+    ) throws -> [LexiconMatch] {
+        throw LexiconStoreError.queryFailed("unexpected pattern query")
     }
 
     func syllableInventory() throws -> [String] {
@@ -567,7 +599,11 @@ private final class ThreadRecordingLexiconStore: LexiconStore, @unchecked Sendab
         return []
     }
 
-    func initialMatches(for initials: [Character], limit: Int) throws -> [LexiconMatch] {
+    func patternMatches(
+        for patterns: [SyllableMatchPattern],
+        resultLimit: Int,
+        scanLimit: Int
+    ) throws -> [LexiconMatch] {
         lock.lock()
         mainThreadQuery = Thread.isMainThread
         lock.unlock()

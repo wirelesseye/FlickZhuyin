@@ -3,9 +3,11 @@ import Foundation
 struct DictionaryMatcher: Sendable {
     struct Configuration: Sendable {
         static let maxWordSyllables = 8
-        static let initialMatchLimit = 64
+        static let patternMatchResultLimit = 64
+        static let patternMatchScanLimit = 2048
         var maxWordSyllables: Int = Configuration.maxWordSyllables
-        var initialMatchLimit: Int = Configuration.initialMatchLimit
+        var patternMatchResultLimit: Int = Configuration.patternMatchResultLimit
+        var patternMatchScanLimit: Int = Configuration.patternMatchScanLimit
     }
 
     let store: any LexiconStore
@@ -18,152 +20,194 @@ struct DictionaryMatcher: Sendable {
 
     func buildLattice(from lattice: SyllableLattice) throws -> WordLattice {
         var outgoing = Array(repeating: [WordEdge](), count: lattice.tokenCount + 1)
-        var seenEdges = Array(repeating: Set<WordEdgeKey>(), count: lattice.tokenCount + 1)
-        var exactMemo: [[SyllableConstraint]: [LexiconMatch]] = [:]
-        var initialMemo: [[Character]: [LexiconMatch]] = [:]
+        var edgeIndices = Array(repeating: [WordEdgeKey: Int](), count: lattice.tokenCount + 1)
+        var memo: [[SyllableMatchPattern]: [LexiconMatch]] = [:]
         for start in 0..<lattice.tokenCount {
-            var exactVisited = Set<ExpansionState>()
-            try expand(
+            var visited = Set<PatternExpansionState>()
+            try expandPatterns(
                 start: start,
                 position: start,
-                constraints: [],
+                patterns: [],
                 syllableEdges: [],
                 lattice: lattice,
                 outgoing: &outgoing,
-                seenEdges: &seenEdges,
-                visited: &exactVisited,
-                memo: &exactMemo
-            )
-            var initialVisited = Set<InitialExpansionState>()
-            try expandInitial(
-                start: start,
-                position: start,
-                initials: [],
-                syllableEdges: [],
-                lattice: lattice,
-                outgoing: &outgoing,
-                seenEdges: &seenEdges,
-                visited: &initialVisited,
-                memo: &initialMemo
+                edgeIndices: &edgeIndices,
+                visited: &visited,
+                memo: &memo
             )
         }
         return WordLattice(tokenCount: lattice.tokenCount, outgoingEdges: outgoing)
     }
 
-    private func expand(
+    private func expandPatterns(
         start: Int,
         position: Int,
-        constraints: [SyllableConstraint],
+        patterns: [SyllableMatchPattern],
         syllableEdges: [SyllableEdge],
         lattice: SyllableLattice,
         outgoing: inout [[WordEdge]],
-        seenEdges: inout [Set<WordEdgeKey>],
-        visited: inout Set<ExpansionState>,
-        memo: inout [[SyllableConstraint]: [LexiconMatch]]
+        edgeIndices: inout [[WordEdgeKey: Int]],
+        visited: inout Set<PatternExpansionState>,
+        memo: inout [[SyllableMatchPattern]: [LexiconMatch]]
     ) throws {
-        for edge in lattice.outgoingEdges[position] where edge.completeness == .complete {
-            let nextConstraints = constraints + [edge.constraint]
-            let nextSyllableEdges = syllableEdges + [edge]
-            let end = edge.tokenRange.upperBound
-            let state = ExpansionState(position: end, constraints: nextConstraints)
-            guard visited.insert(state).inserted else { continue }
-            let matches: [LexiconMatch]
-            if let cached = memo[nextConstraints] {
-                matches = cached
-            } else {
-                matches = try store.exactMatches(for: nextConstraints)
-                memo[nextConstraints] = matches
-            }
-            for match in matches {
-                let key = WordEdgeKey(
-                    tokenRange: start..<end,
-                    text: match.text,
-                    pronunciation: match.pronunciation
-                )
-                guard seenEdges[start].insert(key).inserted else { continue }
-                outgoing[start].append(
-                    WordEdge(
-                        tokenRange: start..<end,
-                        text: match.text,
-                        pronunciation: match.pronunciation,
-                        sourceWeight: match.sourceWeight,
-                        syllableEdges: nextSyllableEdges
+        for edge in lattice.outgoingEdges[position] {
+            for (pattern, matchedEdge) in Self.interpretations(
+                of: edge,
+                hasLongerCompleteEdge: Self.hasLongerCompleteEdge(at: position, than: edge, in: lattice)
+            ) {
+                let nextPatterns = patterns + [pattern]
+                let nextSyllableEdges = syllableEdges + [matchedEdge]
+                let end = matchedEdge.tokenRange.upperBound
+                let state = PatternExpansionState(position: end, patterns: nextPatterns)
+                guard visited.insert(state).inserted else { continue }
+                let matches = try matches(for: nextPatterns, memo: &memo)
+                for match in matches where Self.accepts(match: match, patterns: nextPatterns) {
+                    Self.emit(
+                        start: start,
+                        end: end,
+                        match: match,
+                        syllableEdges: nextSyllableEdges,
+                        outgoing: &outgoing,
+                        edgeIndices: &edgeIndices
                     )
+                }
+                guard nextPatterns.count < configuration.maxWordSyllables else { continue }
+                try expandPatterns(
+                    start: start,
+                    position: end,
+                    patterns: nextPatterns,
+                    syllableEdges: nextSyllableEdges,
+                    lattice: lattice,
+                    outgoing: &outgoing,
+                    edgeIndices: &edgeIndices,
+                    visited: &visited,
+                    memo: &memo
                 )
             }
-            guard nextConstraints.count < configuration.maxWordSyllables else { continue }
-            try expand(
-                start: start,
-                position: end,
-                constraints: nextConstraints,
-                syllableEdges: nextSyllableEdges,
-                lattice: lattice,
-                outgoing: &outgoing,
-                seenEdges: &seenEdges,
-                visited: &visited,
-                memo: &memo
-            )
         }
     }
 
-    private func expandInitial(
-        start: Int,
-        position: Int,
-        initials: [Character],
-        syllableEdges: [SyllableEdge],
-        lattice: SyllableLattice,
-        outgoing: inout [[WordEdge]],
-        seenEdges: inout [Set<WordEdgeKey>],
-        visited: inout Set<InitialExpansionState>,
-        memo: inout [[Character]: [LexiconMatch]]
-    ) throws {
-        for edge in lattice.outgoingEdges[position] where edge.isInitialAbbreviation {
-            guard let initial = edge.constraint.base.first else { continue }
-            let nextInitials = initials + [initial]
-            let nextSyllableEdges = syllableEdges + [edge]
-            let end = edge.tokenRange.upperBound
-            let state = InitialExpansionState(position: end, initials: nextInitials)
-            guard visited.insert(state).inserted else { continue }
-            let matches: [LexiconMatch]
-            if let cached = memo[nextInitials] {
-                matches = cached
-            } else {
-                matches = try store.initialMatches(
-                    for: nextInitials,
-                    limit: configuration.initialMatchLimit
-                )
-                memo[nextInitials] = matches
-            }
-            for match in matches where match.pronunciation.count == nextInitials.count {
-                let key = WordEdgeKey(
-                    tokenRange: start..<end,
-                    text: match.text,
-                    pronunciation: match.pronunciation
-                )
-                guard seenEdges[start].insert(key).inserted else { continue }
-                outgoing[start].append(
-                    WordEdge(
-                        tokenRange: start..<end,
-                        text: match.text,
-                        pronunciation: match.pronunciation,
-                        sourceWeight: match.sourceWeight,
-                        syllableEdges: nextSyllableEdges
-                    )
-                )
-            }
-            guard nextInitials.count < configuration.maxWordSyllables else { continue }
-            try expandInitial(
-                start: start,
-                position: end,
-                initials: nextInitials,
-                syllableEdges: nextSyllableEdges,
-                lattice: lattice,
-                outgoing: &outgoing,
-                seenEdges: &seenEdges,
-                visited: &visited,
-                memo: &memo
+    private func matches(
+        for patterns: [SyllableMatchPattern],
+        memo: inout [[SyllableMatchPattern]: [LexiconMatch]]
+    ) throws -> [LexiconMatch] {
+        if let cached = memo[patterns] {
+            return cached
+        }
+        let matches: [LexiconMatch]
+        if patterns.allSatisfy(\.isExact) {
+            matches = try store.exactMatches(for: patterns.compactMap(\.exactConstraint))
+        } else {
+            matches = try store.patternMatches(
+                for: patterns,
+                resultLimit: configuration.patternMatchResultLimit,
+                scanLimit: configuration.patternMatchScanLimit
             )
         }
+        memo[patterns] = matches
+        return matches
+    }
+
+    private static func interpretations(
+        of edge: SyllableEdge,
+        hasLongerCompleteEdge: Bool
+    ) -> [(pattern: SyllableMatchPattern, edge: SyllableEdge)] {
+        var result: [(pattern: SyllableMatchPattern, edge: SyllableEdge)] = []
+        if edge.completeness == .complete {
+            result.append((.exact(edge.constraint), edge))
+        }
+        if let abbreviation = abbreviationInterpretation(
+            of: edge,
+            hasLongerCompleteEdge: hasLongerCompleteEdge
+        ) {
+            result.append(abbreviation)
+        }
+        return result
+    }
+
+    private static func abbreviationInterpretation(
+        of edge: SyllableEdge,
+        hasLongerCompleteEdge: Bool
+    ) -> (pattern: SyllableMatchPattern, edge: SyllableEdge)? {
+        guard edge.completeness != .fallback,
+              edge.constraint.tone == nil,
+              edge.constraint.base.count == 1,
+              let initial = edge.constraint.base.first
+        else {
+            return nil
+        }
+        if edge.isInitialAbbreviation {
+            return (.initial(initial), edge)
+        }
+        // A complete one-symbol syllable (for example ㄨ) is only treated as an
+        // abbreviation when no longer complete syllable starts at the same token.
+        // Otherwise typing the full syllable (for example ㄨㄛ) would also expand
+        // into unrelated mixed segmentations.
+        guard !hasLongerCompleteEdge else { return nil }
+        let abbreviated = SyllableEdge(
+            tokenRange: edge.tokenRange,
+            constraint: edge.constraint,
+            completeness: .incomplete,
+            parserCost: SyllableParser.incompleteCost
+        )
+        return (.initial(initial), abbreviated)
+    }
+
+    private static func hasLongerCompleteEdge(
+        at position: Int,
+        than edge: SyllableEdge,
+        in lattice: SyllableLattice
+    ) -> Bool {
+        guard edge.completeness == .complete, edge.constraint.base.count == 1 else { return false }
+        return lattice.outgoingEdges[position].contains {
+            $0.completeness == .complete && $0.tokenRange.upperBound > edge.tokenRange.upperBound
+        }
+    }
+
+    private static func accepts(match: LexiconMatch, patterns: [SyllableMatchPattern]) -> Bool {
+        guard match.pronunciation.count == patterns.count else { return false }
+        for (pattern, syllable) in zip(patterns, match.pronunciation) {
+            guard pattern.accepts(base: syllable.base, tone: syllable.tone) else { return false }
+        }
+        return true
+    }
+
+    private static func emit(
+        start: Int,
+        end: Int,
+        match: LexiconMatch,
+        syllableEdges: [SyllableEdge],
+        outgoing: inout [[WordEdge]],
+        edgeIndices: inout [[WordEdgeKey: Int]]
+    ) {
+        let key = WordEdgeKey(
+            tokenRange: start..<end,
+            text: match.text,
+            pronunciation: match.pronunciation
+        )
+        if let index = edgeIndices[start][key] {
+            let parserCost = syllableEdges.reduce(0) { $0 + $1.parserCost }
+            let existingCost = outgoing[start][index].syllableEdges.reduce(0) { $0 + $1.parserCost }
+            guard parserCost < existingCost else { return }
+            outgoing[start][index] = WordEdge(
+                tokenRange: start..<end,
+                text: match.text,
+                pronunciation: match.pronunciation,
+                sourceWeight: match.sourceWeight,
+                syllableEdges: syllableEdges
+            )
+            return
+        }
+        edgeIndices[start][key] = outgoing[start].count
+        outgoing[start].append(
+            WordEdge(
+                tokenRange: start..<end,
+                text: match.text,
+                pronunciation: match.pronunciation,
+                sourceWeight: match.sourceWeight,
+                syllableEdges: syllableEdges
+            )
+        )
     }
 }
 
@@ -173,12 +217,7 @@ private struct WordEdgeKey: Hashable {
     let pronunciation: [CanonicalSyllable]
 }
 
-private struct ExpansionState: Hashable {
+private struct PatternExpansionState: Hashable {
     let position: Int
-    let constraints: [SyllableConstraint]
-}
-
-private struct InitialExpansionState: Hashable {
-    let position: Int
-    let initials: [Character]
+    let patterns: [SyllableMatchPattern]
 }
