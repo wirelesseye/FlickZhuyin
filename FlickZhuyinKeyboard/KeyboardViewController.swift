@@ -351,11 +351,28 @@ final class KeyboardViewController: UIInputViewController {
             )
             button.addTarget(self, action: #selector(handleInputModeList(from:with:)), for: .allTouchEvents)
             nextKeyboardButton = button
+        } else if key == .delete || key == .cursorLeft || key == .cursorRight {
+            installKeyRepeat(for: key, on: button)
         } else {
             button.addAction(UIAction { [weak self] _ in self?.handle(key) }, for: .touchUpInside)
         }
         keyButtons.append((key, button))
         return button
+    }
+
+    private func installKeyRepeat(for key: KeyboardKey, on button: KeyboardButton) {
+        let repeater = KeyRepeater { [weak self] in self?.handle(key) }
+        button.addAction(UIAction { _ in repeater.begin() }, for: .touchDown)
+        button.addAction(
+            UIAction { _ in repeater.end() },
+            for: [.touchUpOutside, .touchCancel, .touchDragExit]
+        )
+        button.addAction(UIAction { [weak self] _ in
+            let didRepeat = repeater.consumeRepeat()
+            repeater.end()
+            guard !didRepeat else { return }
+            self?.handle(key)
+        }, for: .touchUpInside)
     }
 
     private func prepareForInputModeSwitch() {

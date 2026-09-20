@@ -20,6 +20,59 @@ enum KeyHaptics {
     }
 }
 
+final class KeyRepeater {
+    private let initialDelay: TimeInterval
+    private let interval: TimeInterval
+    private let action: () -> Void
+    private var timer: Timer?
+    private var didRepeat = false
+
+    init(
+        initialDelay: TimeInterval = 0.4,
+        interval: TimeInterval = 0.1,
+        action: @escaping () -> Void
+    ) {
+        self.initialDelay = initialDelay
+        self.interval = interval
+        self.action = action
+    }
+
+    deinit {
+        timer?.invalidate()
+    }
+
+    func begin() {
+        guard timer == nil else { return }
+        didRepeat = false
+        let timer = Timer(timeInterval: initialDelay, repeats: false) { [weak self] _ in
+            self?.fireFirstRepeat()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+    }
+
+    func end() {
+        timer?.invalidate()
+        timer = nil
+    }
+
+    func consumeRepeat() -> Bool {
+        defer { didRepeat = false }
+        return didRepeat
+    }
+
+    private func fireFirstRepeat() {
+        timer = nil
+        didRepeat = true
+        action()
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
+            self?.action()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+    }
+}
+
 class KeyboardButton: UIButton {
     static let standardKeyColor = UIColor { traits in
         traits.userInterfaceStyle == .dark
