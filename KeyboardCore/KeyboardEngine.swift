@@ -26,6 +26,10 @@ struct KeyboardEngine: Sendable {
         !composition.isEmpty
     }
 
+    var hasPendingTokens: Bool {
+        composition.hasPendingTokens
+    }
+
     mutating func update(
         for key: KeyboardKey,
         at timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime
@@ -109,7 +113,7 @@ struct KeyboardEngine: Sendable {
         }
     }
 
-    mutating func selectCandidate(_ candidate: InputCandidate) -> KeyboardUpdate {
+    mutating func selectCandidate(_ candidate: InputCandidate, autoCommit: Bool = false) -> KeyboardUpdate {
         let tokens = composition.activeTokens
         guard mode == .zhuyin, !tokens.isEmpty else { return .none }
         composition.replaceActiveTokens(
@@ -119,10 +123,23 @@ struct KeyboardEngine: Sendable {
                 pronunciation: candidate.pronunciation
             )
         )
-        return KeyboardUpdate(
+        if autoCommit, !composition.hasPendingTokens {
+            let committedText = composition.markedText
+            composition = ZhuyinComposition()
+            return KeyboardUpdate(
+                documentEffects: [.insertText(committedText)],
+                invalidatesCandidates: true
+            )
+        }
+        let remainingTokens = composition.activeTokens
+        var update = KeyboardUpdate(
             documentEffects: [.setMarkedText(composition.markedText, caret: composition.caretOffset)],
-            invalidatesCandidates: true
+            invalidatesCandidates: remainingTokens.isEmpty
         )
+        if !remainingTokens.isEmpty {
+            update.candidateRequest = CandidateRequest(tokens: remainingTokens)
+        }
+        return update
     }
 
     mutating func resetComposition() -> KeyboardUpdate {

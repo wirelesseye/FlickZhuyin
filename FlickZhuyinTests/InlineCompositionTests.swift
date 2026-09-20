@@ -44,6 +44,20 @@ final class ZhuyinCompositionTests: XCTestCase {
         XCTAssertEqual(composition.markedText, "")
     }
 
+    func testActiveTokensCoverOnlyTokensBeforeCaret() {
+        let chunk = SelectedChunk(
+            text: "音",
+            sourceTokens: [.symbol("ㄧ")],
+            pronunciation: [zhuyinConstraint]
+        )
+        let composition = ZhuyinComposition(
+            pieces: [.selected(chunk), .token(.symbol("ㄧ"))],
+            caretIndex: 1
+        )
+        XCTAssertTrue(composition.activeTokens.isEmpty)
+        XCTAssertTrue(composition.hasPendingTokens)
+    }
+
     func testCaretOffsetCountsUTF16Units() {
         let chunk = SelectedChunk(
             text: "𠀀",
@@ -82,6 +96,92 @@ final class KeyboardCompositionTests: XCTestCase {
         XCTAssertEqual(engine.composition.selectedChunks.map(\.text), ["注"])
         XCTAssertTrue(engine.composition.activeTokens.isEmpty)
         XCTAssertFalse(engine.hasActiveTokens)
+    }
+
+    private func typeTwoSyllables(_ engine: inout KeyboardEngine) {
+        for key in [
+            KeyboardKey.zhuyin("ㄓ"), .zhuyin("ㄨ"), .tone(.fourth),
+            .zhuyin("ㄧ"), .zhuyin("ㄣ"), .tone(.first)
+        ] {
+            _ = engine.update(for: key)
+        }
+    }
+
+    func testCandidatesCoverOnlyTokensBeforeCaret() {
+        var engine = KeyboardEngine()
+        typeTwoSyllables(&engine)
+        var update = KeyboardUpdate.none
+        for _ in 0..<3 {
+            update = engine.update(for: .cursorLeft)
+        }
+        XCTAssertEqual(update.documentEffects, [.setMarkedText("ㄓㄨˋㄧㄣˉ", caret: 3)])
+        XCTAssertEqual(
+            update.candidateRequest?.tokens,
+            [.symbol("ㄓ"), .symbol("ㄨ"), .tone(.fourth)]
+        )
+    }
+
+    func testSelectingPartialRunMovesCaretToEndAndRequestsRemainingTokens() {
+        var engine = KeyboardEngine()
+        typeTwoSyllables(&engine)
+        for _ in 0..<3 {
+            _ = engine.update(for: .cursorLeft)
+        }
+        let update = engine.selectCandidate(makeCandidate("注"))
+        XCTAssertEqual(update.documentEffects, [.setMarkedText("注ㄧㄣˉ", caret: 4)])
+        XCTAssertEqual(
+            update.candidateRequest?.tokens,
+            [.symbol("ㄧ"), .symbol("ㄣ"), .tone(.first)]
+        )
+        XCTAssertFalse(update.invalidatesCandidates)
+        XCTAssertEqual(engine.markedText, "注ㄧㄣˉ")
+        XCTAssertTrue(engine.hasPendingTokens)
+    }
+
+    func testAutoCommitWaitsUntilAllTokensAreSelected() {
+        var engine = KeyboardEngine()
+        typeTwoSyllables(&engine)
+        for _ in 0..<3 {
+            _ = engine.update(for: .cursorLeft)
+        }
+        let partial = engine.selectCandidate(makeCandidate("注"), autoCommit: true)
+        XCTAssertEqual(partial.documentEffects, [.setMarkedText("注ㄧㄣˉ", caret: 4)])
+        XCTAssertEqual(
+            partial.candidateRequest?.tokens,
+            [.symbol("ㄧ"), .symbol("ㄣ"), .tone(.first)]
+        )
+        XCTAssertFalse(engine.composition.isEmpty)
+        let final = engine.selectCandidate(
+            makeCandidate("音", base: "ㄧㄣ", tone: .first),
+            autoCommit: true
+        )
+        XCTAssertEqual(final.documentEffects, [.insertText("注音")])
+        XCTAssertTrue(engine.composition.isEmpty)
+    }
+
+    func testAutoCommitCandidateSelectionCommitsMarkedText() {
+        var engine = KeyboardEngine()
+        _ = engine.update(for: .zhuyin("ㄓ"))
+        let update = engine.selectCandidate(makeCandidate("注"), autoCommit: true)
+        XCTAssertEqual(update.documentEffects, [.insertText("注")])
+        XCTAssertTrue(update.invalidatesCandidates)
+        XCTAssertNil(update.candidateRequest)
+        XCTAssertTrue(engine.composition.isEmpty)
+        XCTAssertFalse(engine.hasMarkedText)
+    }
+
+    func testAutoCommitCommitsEarlierSelectedChunksWithCandidate() {
+        var engine = KeyboardEngine()
+        selectZhuyin(&engine)
+        for key in [KeyboardKey.zhuyin("ㄧ"), .zhuyin("ㄣ"), .tone(.first)] {
+            _ = engine.update(for: key)
+        }
+        let update = engine.selectCandidate(
+            makeCandidate("音", base: "ㄧㄣ", tone: .first),
+            autoCommit: true
+        )
+        XCTAssertEqual(update.documentEffects, [.insertText("注音")])
+        XCTAssertTrue(engine.composition.isEmpty)
     }
 
     func testSelectedChunkKeepsSourceTokens() {
@@ -233,7 +333,7 @@ final class KeyboardCompositionTests: XCTestCase {
         _ = engine.update(for: .zhuyin("ㄨ"))
         let update = engine.update(for: .cursorLeft)
         XCTAssertEqual(update.documentEffects, [.setMarkedText("ㄓㄨ", caret: 1)])
-        XCTAssertEqual(update.candidateRequest?.tokens, [.symbol("ㄓ"), .symbol("ㄨ")])
+        XCTAssertEqual(update.candidateRequest?.tokens, [.symbol("ㄓ")])
         XCTAssertEqual(engine.markedText, "ㄓㄨ")
     }
 

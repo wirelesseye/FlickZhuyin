@@ -68,12 +68,14 @@ struct ZhuyinComposition: Equatable, Sendable {
         }
     }
 
+    var hasPendingTokens: Bool {
+        pieces.contains { $0.token != nil }
+    }
+
     var activeTokenRange: Range<Int> {
         var lower = caretIndex
-        var upper = caretIndex
         while lower > 0, pieces[lower - 1].token != nil { lower -= 1 }
-        while upper < pieces.count, pieces[upper].token != nil { upper += 1 }
-        return lower..<upper
+        return lower..<caretIndex
     }
 
     var activeTokens: [ZhuyinInputToken] {
@@ -128,6 +130,6 @@ struct ZhuyinComposition: Equatable, Sendable {
     mutating func replaceActiveTokens(with chunk: SelectedChunk) {
         let range = activeTokenRange
         pieces.replaceSubrange(range, with: [.selected(chunk)])
-        caretIndex = range.lowerBound + 1
+        caretIndex = pieces.count
     }
 }

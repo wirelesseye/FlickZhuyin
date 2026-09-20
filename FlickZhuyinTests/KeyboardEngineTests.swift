@@ -54,7 +54,7 @@ final class KeyboardEngineTests: XCTestCase {
             engine.update(for: .cursorLeft),
             KeyboardUpdate(
                 documentEffects: [.setMarkedText("ㄓ", caret: 0)],
-                candidateRequest: CandidateRequest(tokens: [.symbol("ㄓ")])
+                invalidatesCandidates: true
             )
         )
         XCTAssertTrue(engine.hasMarkedText)

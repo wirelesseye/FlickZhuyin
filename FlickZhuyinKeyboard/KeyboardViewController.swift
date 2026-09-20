@@ -355,7 +355,12 @@ final class KeyboardViewController: UIInputViewController {
 
     private func select(_ candidate: InputCandidate) {
         setCandidateListExpanded(false)
-        apply(engine.selectCandidate(candidate))
+        apply(
+            engine.selectCandidate(
+                candidate,
+                autoCommit: KeyboardSettings.autoCommitComposition
+            )
+        )
         refreshUI()
     }
 

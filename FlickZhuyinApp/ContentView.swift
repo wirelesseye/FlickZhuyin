@@ -6,6 +6,10 @@ struct ContentView: View {
         KeyboardSettings.showsDirectionalSymbolsKey,
         store: KeyboardSettings.sharedDefaults
     ) private var showsDirectionalSymbols = KeyboardSettings.showsDirectionalSymbols
+    @AppStorage(
+        KeyboardSettings.autoCommitCompositionKey,
+        store: KeyboardSettings.sharedDefaults
+    ) private var autoCommitComposition = KeyboardSettings.autoCommitComposition
 
     var body: some View {
         NavigationStack {
@@ -27,6 +31,11 @@ struct ContentView: View {
 
                 Toggle("顯示四方向符號", isOn: $showsDirectionalSymbols)
                 Text("關閉後注音與標點按鍵只顯示中央符號。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                Toggle("選完字後自動提交", isOn: $autoCommitComposition)
+                Text("關閉後需按「確定」提交組字內容。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
 
