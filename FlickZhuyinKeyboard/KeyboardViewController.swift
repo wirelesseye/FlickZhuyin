@@ -339,6 +339,10 @@ final class KeyboardViewController: UIInputViewController {
         button.accessibilityLabel = accessibilityLabel(for: key)
         button.normalColor = KeyboardButton.standardKeyColor
 
+        if case .letter = key {
+            button.titleLabel?.font = .systemFont(ofSize: 24, weight: .regular)
+        }
+
         if key == .nextKeyboard {
             button.setImage(UIImage(systemName: "globe"), for: .normal)
             button.addAction(
@@ -517,46 +521,54 @@ final class KeyboardViewController: UIInputViewController {
             }
         }
 
-        for (key, button) in keyButtons {
-            switch key {
-            case let .letter(character):
-                let title = engine.letterCase == .lowercase
-                    ? String(character).lowercased()
-                    : String(character).uppercased()
-                button.setTitle(title, for: .normal)
-            case .shift:
-                let symbol = engine.letterCase == .capsLocked ? "capslock.fill" : "shift.fill"
-                button.setTitle(nil, for: .normal)
-                button.setImage(keyIcon(named: symbol), for: .normal)
-                button.tintColor = engine.letterCase == .lowercase ? .label : .systemBlue
-            case .delete:
-                button.setTitle(nil, for: .normal)
-                button.setImage(keyIcon(named: "delete.left"), for: .normal)
-                button.tintColor = .label
-            case .cursorLeft, .cursorRight:
-                button.setTitle(nil, for: .normal)
-                let symbol = key == .cursorLeft ? "arrowtriangle.left.fill" : "arrowtriangle.right.fill"
-                button.setImage(keyIcon(named: symbol, pointSize: 12), for: .normal)
-                button.tintColor = .label
-            case .space:
-                button.setTitle(nil, for: .normal)
-                button.setImage(nil, for: .normal)
-            case .return:
-                updateReturnKeyFace(button)
-            case .modeSwitch:
-                button.setTitle(engine.mode == .zhuyin ? "ABC" : "中", for: .normal)
-                button.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
-            case let .tone(tone):
-                button.setAttributedTitle(
-                    ToneSymbolStyle.attributedText(
-                        for: tone.symbol,
-                        fontSize: ToneSymbolStyle.keyFontSize
-                    ),
-                    for: .normal
-                )
-            case .nextKeyboard, .zhuyin:
-                break
+        UIView.performWithoutAnimation {
+            for (key, button) in keyButtons {
+                switch key {
+                case let .letter(character):
+                    let title = engine.letterCase == .lowercase
+                        ? String(character).lowercased()
+                        : String(character).uppercased()
+                    button.setTitle(title, for: .normal)
+                case .shift:
+                    let symbol: String
+                    switch engine.letterCase {
+                    case .lowercase: symbol = "shift"
+                    case .shifted: symbol = "shift.fill"
+                    case .capsLocked: symbol = "capslock.fill"
+                    }
+                    button.setTitle(nil, for: .normal)
+                    button.setImage(keyIcon(named: symbol), for: .normal)
+                    button.tintColor = .label
+                case .delete:
+                    button.setTitle(nil, for: .normal)
+                    button.setImage(keyIcon(named: "delete.left"), for: .normal)
+                    button.tintColor = .label
+                case .cursorLeft, .cursorRight:
+                    button.setTitle(nil, for: .normal)
+                    let symbol = key == .cursorLeft ? "arrowtriangle.left.fill" : "arrowtriangle.right.fill"
+                    button.setImage(keyIcon(named: symbol, pointSize: 12), for: .normal)
+                    button.tintColor = .label
+                case .space:
+                    button.setTitle(nil, for: .normal)
+                    button.setImage(nil, for: .normal)
+                case .return:
+                    updateReturnKeyFace(button)
+                case .modeSwitch:
+                    button.setTitle(engine.mode == .zhuyin ? "ABC" : "中", for: .normal)
+                    button.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
+                case let .tone(tone):
+                    button.setAttributedTitle(
+                        ToneSymbolStyle.attributedText(
+                            for: tone.symbol,
+                            fontSize: ToneSymbolStyle.keyFontSize
+                        ),
+                        for: .normal
+                    )
+                case .nextKeyboard, .zhuyin:
+                    break
+                }
             }
+            view.layoutIfNeeded()
         }
     }
 
