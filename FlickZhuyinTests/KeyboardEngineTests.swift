@@ -64,17 +64,21 @@ final class KeyboardEngineTests: XCTestCase {
     func testAllZhuyinFlickMappings() {
         let expected = [
             ["ㄅ", "ㄆ", "ㄇ", "ㄈ"], ["ㄉ", "ㄊ", "ㄋ", "ㄌ"],
-            ["ㄍ", "ㄎ", "ㄏ", "ㄐ", "ㄑ"], ["ㄓ", "ㄔ", "ㄕ", "ㄖ", "ㄒ"],
-            ["ㄗ", "ㄘ", "ㄙ"], ["ㄧ", "ㄨ", "ㄩ", "ㄦ"],
-            ["ㄚ", "ㄛ", "ㄜ", "ㄝ"], ["ㄞ", "ㄟ", "ㄠ", "ㄡ"],
-            ["ㄢ", "ㄣ", "ㄤ", "ㄥ"]
+            ["ㄍ", "ㄎ", "ㄏ"], ["ㄐ", "ㄑ", "ㄒ"],
+            ["ㄓ", "ㄔ", "ㄕ", "ㄖ"], ["ㄗ", "ㄘ", "ㄙ"],
+            ["ㄧ", "ㄨ", "ㄩ", "ㄦ"], ["ㄚ", "ㄛ", "ㄜ", "ㄝ"],
+            ["ㄞ", "ㄟ", "ㄠ", "ㄡ"]
         ]
         let directions = FlickDirection.allCases
         for (mapping, symbols) in zip(ZhuyinLayout.groups, expected) {
             XCTAssertEqual(directions.compactMap { mapping[$0] }, symbols)
         }
+        XCTAssertEqual(
+            directions.compactMap { ZhuyinLayout.nasalFinals[$0] },
+            ["ㄢ", "ㄣ", "ㄤ", "ㄥ"]
+        )
         XCTAssertNil(ZhuyinLayout.groups[0][.down])
-        XCTAssertNil(ZhuyinLayout.groups[4][.right])
+        XCTAssertNil(ZhuyinLayout.groups[5][.right])
     }
 
     func testFlickDirectionResolution() {

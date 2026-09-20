@@ -10,7 +10,7 @@ final class KeyboardViewController: UIInputViewController {
     private weak var expandedCandidatesView: ExpandedCandidateView?
     private weak var keyGrid: UIStackView?
     private weak var toneButton: FlickKeyButton?
-    private weak var neutralToneButton: FlickKeyButton?
+    private weak var punctuationButton: FlickKeyButton?
     private var heightConstraint: NSLayoutConstraint?
     private var isCandidateListExpanded = false
     private var documentEffectDepth = 0
@@ -69,7 +69,7 @@ final class KeyboardViewController: UIInputViewController {
         expandedCandidatesView = nil
         keyGrid = nil
         toneButton = nil
-        neutralToneButton = nil
+        punctuationButton = nil
         isCandidateListExpanded = false
 
         switch engine.mode {
@@ -137,15 +137,7 @@ final class KeyboardViewController: UIInputViewController {
             }
             row.addArrangedSubview(leadingColumn)
             for mapping in ZhuyinLayout.groups[(rowIndex * 3)..<(rowIndex * 3 + 3)] {
-                let button = makeFlickButton(mapping: mapping) { [weak self] direction in
-                    guard let symbol = mapping[direction], let character = symbol.first else { return }
-                    self?.handle(.zhuyin(character))
-                }
-                if showsDirectionalSymbols {
-                    button.directionalFaceStyle = .zhuyin
-                    button.directionalFace = mapping
-                }
-                row.addArrangedSubview(button)
+                row.addArrangedSubview(makeZhuyinControl(mapping))
             }
             let trailingColumn: UIView = switch rowIndex {
             case 0: makeButton(for: .delete)
@@ -158,11 +150,11 @@ final class KeyboardViewController: UIInputViewController {
 
         let spaceRow = makeRow()
         spaceRow.addArrangedSubview(makeButton(for: .modeSwitch))
-        let neutralToneButton = makeSecondaryPunctuationControl()
-        spaceRow.addArrangedSubview(neutralToneButton)
-        self.neutralToneButton = neutralToneButton
         spaceRow.addArrangedSubview(makeToneControl())
-        spaceRow.addArrangedSubview(makePunctuationControl())
+        spaceRow.addArrangedSubview(makeZhuyinControl(ZhuyinLayout.nasalFinals))
+        let punctuationButton = makePunctuationControl()
+        spaceRow.addArrangedSubview(punctuationButton)
+        self.punctuationButton = punctuationButton
         spaceRow.addArrangedSubview(makeGridSpacer())
         grid.addArrangedSubview(spaceRow)
         mainStack.addArrangedSubview(grid)
@@ -217,19 +209,20 @@ final class KeyboardViewController: UIInputViewController {
         return button
     }
 
-    private func makePunctuationControl() -> FlickKeyButton {
-        let mapping = ZhuyinLayout.punctuation
+    private func makeZhuyinControl(_ mapping: FlickKeyMapping) -> FlickKeyButton {
         let button = makeFlickButton(mapping: mapping) { [weak self] direction in
-            guard let symbol = mapping[direction] else { return }
-            self?.insertPunctuation(symbol)
+            guard let symbol = mapping[direction], let character = symbol.first else { return }
+            self?.handle(.zhuyin(character))
         }
-        applyPunctuationFace(button, mapping: mapping)
-        button.accessibilityLabel = mappingSymbols(mapping)
+        if showsDirectionalSymbols {
+            button.directionalFaceStyle = .zhuyin
+            button.directionalFace = mapping
+        }
         return button
     }
 
-    private func makeSecondaryPunctuationControl() -> FlickKeyButton {
-        let mapping = ZhuyinLayout.secondaryPunctuation
+    private func makePunctuationControl() -> FlickKeyButton {
+        let mapping = ZhuyinLayout.punctuation
         let button = makeFlickButton(mapping: mapping) { [weak self] direction in
             guard let self else { return }
             if self.engine.hasActiveTokens {
@@ -456,26 +449,24 @@ final class KeyboardViewController: UIInputViewController {
             refreshCandidates()
             let hasPending = engine.hasActiveTokens
             if hasPending {
-                neutralToneButton?.mapping = FlickKeyMapping([MandarinTone.neutral.symbol])
-                neutralToneButton?.directionalFace = nil
-                neutralToneButton?.showsPreview = false
-                neutralToneButton?.setAttributedTitle(
+                punctuationButton?.mapping = FlickKeyMapping([MandarinTone.neutral.symbol])
+                punctuationButton?.directionalFace = nil
+                punctuationButton?.showsPreview = false
+                punctuationButton?.setAttributedTitle(
                     ToneSymbolStyle.attributedText(
                         for: MandarinTone.neutral.symbol,
                         fontSize: ToneSymbolStyle.keyFontSize
                     ),
                     for: .normal
                 )
-                neutralToneButton?.accessibilityLabel = "輕聲"
+                punctuationButton?.accessibilityLabel = "輕聲"
             } else {
-                neutralToneButton?.mapping = ZhuyinLayout.secondaryPunctuation
-                if let neutralToneButton {
-                    applyPunctuationFace(neutralToneButton, mapping: ZhuyinLayout.secondaryPunctuation)
+                punctuationButton?.mapping = ZhuyinLayout.punctuation
+                if let punctuationButton {
+                    applyPunctuationFace(punctuationButton, mapping: ZhuyinLayout.punctuation)
                 }
-                neutralToneButton?.showsPreview = true
-                neutralToneButton?.accessibilityLabel = mappingSymbols(
-                    ZhuyinLayout.secondaryPunctuation
-                )
+                punctuationButton?.showsPreview = true
+                punctuationButton?.accessibilityLabel = mappingSymbols(ZhuyinLayout.punctuation)
             }
             toneButton?.mapping = hasPending
                 ? ZhuyinLayout.tones

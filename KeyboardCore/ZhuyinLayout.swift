@@ -49,14 +49,16 @@ enum ZhuyinLayout {
     static let groups: [FlickKeyMapping] = [
         FlickKeyMapping(["ㄅ", "ㄆ", "ㄇ", "ㄈ"]),
         FlickKeyMapping(["ㄉ", "ㄊ", "ㄋ", "ㄌ"]),
-        FlickKeyMapping(["ㄍ", "ㄎ", "ㄏ", "ㄐ", "ㄑ"]),
-        FlickKeyMapping(["ㄓ", "ㄔ", "ㄕ", "ㄖ", "ㄒ"]),
+        FlickKeyMapping(["ㄍ", "ㄎ", "ㄏ"]),
+        FlickKeyMapping(["ㄐ", "ㄑ", "ㄒ"]),
+        FlickKeyMapping(["ㄓ", "ㄔ", "ㄕ", "ㄖ"]),
         FlickKeyMapping(["ㄗ", "ㄘ", "ㄙ"]),
         FlickKeyMapping(["ㄧ", "ㄨ", "ㄩ", "ㄦ"]),
         FlickKeyMapping(["ㄚ", "ㄛ", "ㄜ", "ㄝ"]),
-        FlickKeyMapping(["ㄞ", "ㄟ", "ㄠ", "ㄡ"]),
-        FlickKeyMapping(["ㄢ", "ㄣ", "ㄤ", "ㄥ"])
+        FlickKeyMapping(["ㄞ", "ㄟ", "ㄠ", "ㄡ"])
     ]
+
+    static let nasalFinals = FlickKeyMapping(["ㄢ", "ㄣ", "ㄤ", "ㄥ"])
 
     static let tones = FlickKeyMapping([
         MandarinTone.first.symbol,
@@ -66,8 +68,6 @@ enum ZhuyinLayout {
     ])
 
     static let punctuation = FlickKeyMapping(["，", "。", "？", "！"])
-
-    static let secondaryPunctuation = FlickKeyMapping(["…", "「", "：", "」"])
 
     static func tone(for direction: FlickDirection) -> MandarinTone? {
         switch direction {
