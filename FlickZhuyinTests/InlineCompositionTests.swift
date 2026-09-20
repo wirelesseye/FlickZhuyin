@@ -752,17 +752,35 @@ final class ChineseInputCoordinatorTests: XCTestCase {
         coordinator.requestCandidates(for: second)
         await waitUntil { await pipeline.requestedCount() == 2 }
         XCTAssertEqual(coordinator.state, .loading)
-        XCTAssertEqual(coordinator.candidates.map(\.text), ["ㄓㄨ"])
-        XCTAssertTrue(coordinator.candidates.allSatisfy(\.isRawFallback))
+        XCTAssertTrue(coordinator.candidates.isEmpty)
 
         await pipeline.resolveNext(with: [makeCandidate("舊")])
         try? await Task.sleep(nanoseconds: 20_000_000)
         XCTAssertEqual(coordinator.state, .loading)
-        XCTAssertEqual(coordinator.candidates.map(\.text), ["ㄓㄨ"])
+        XCTAssertTrue(coordinator.candidates.isEmpty)
 
         await pipeline.resolveNext(with: [makeCandidate("新")])
         await waitUntil { coordinator.state == .ready }
         XCTAssertEqual(coordinator.candidates.map(\.text), ["新"])
+    }
+
+    func testLoadingKeepsPreviousCandidatesUntilNewResultArrives() async {
+        let pipeline = ControlledPipeline()
+        let coordinator = ChineseInputCoordinator { pipeline }
+        coordinator.requestCandidates(for: [.symbol("ㄓ")])
+        await waitUntil { await pipeline.requestedCount() == 1 }
+        await pipeline.resolveNext(with: [makeCandidate("之")])
+        await waitUntil { coordinator.state == .ready }
+        XCTAssertEqual(coordinator.candidates.map(\.text), ["之"])
+
+        coordinator.requestCandidates(for: [.symbol("ㄓ"), .symbol("ㄨ")])
+        XCTAssertEqual(coordinator.state, .loading)
+        XCTAssertEqual(coordinator.candidates.map(\.text), ["之"])
+
+        await waitUntil { await pipeline.requestedCount() == 2 }
+        await pipeline.resolveNext(with: [makeCandidate("注")])
+        await waitUntil { coordinator.state == .ready }
+        XCTAssertEqual(coordinator.candidates.map(\.text), ["注"])
     }
 
     func testInvalidateDropsInFlightResult() async {
@@ -990,6 +1008,19 @@ final class CandidateViewLayoutTests: XCTestCase {
         bar.update(with: makeCandidates(3))
         bar.layoutIfNeeded()
         XCTAssertEqual(bar.visibleCandidateCount, 3)
+    }
+
+    func testCandidateBarKeepsScrollOffsetWhenCandidatesUnchanged() throws {
+        let window = makeWindow()
+        let bar = CandidateBarView(frame: CGRect(x: 0, y: 0, width: 390, height: 40))
+        window.addSubview(bar)
+        let candidates = makeCandidates(20)
+        bar.update(with: candidates)
+        bar.layoutIfNeeded()
+        let collectionView = try XCTUnwrap(collectionView(in: bar))
+        collectionView.setContentOffset(CGPoint(x: 40, y: 0), animated: false)
+        bar.update(with: candidates)
+        XCTAssertEqual(collectionView.contentOffset.x, 40, accuracy: 0.5)
     }
 
     func testCandidateBarExpansionKeepsFirstRowCount() throws {

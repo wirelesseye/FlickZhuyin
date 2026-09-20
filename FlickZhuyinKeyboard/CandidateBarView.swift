@@ -178,6 +178,7 @@ final class CandidateBarView: UIView, UICollectionViewDataSource, UICollectionVi
     }
 
     func update(with candidates: [InputCandidate]) {
+        guard candidates != self.candidates else { return }
         self.candidates = candidates
         UIView.performWithoutAnimation {
             isAdjustingLayout = true

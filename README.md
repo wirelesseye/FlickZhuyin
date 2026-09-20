@@ -80,7 +80,7 @@ FlickZhuyin 是一個實驗性的 iOS 自訂注音鍵盤，使用類似日文假
 中文 composition 由「已選文字」與「未選注音」兩部分組成，會以 marked text 即時顯示在宿主輸入框。例如 `ㄓㄨˋ → 注 → ㄧㄣˉ → 注音`：
 
 - 輸入注音後，輸入框立即顯示原始注音（例如 `注ㄧㄣˉ`），候選列同步查詢 production 詞典。
-- 候選列在查詢完成前先顯示原始注音 fallback，完成後換成 Decoder 的 Top-K 候選；候選列依文字合併、每組保留分數最低者，raw 注音候選獨立保留。
+- 候選查詢在背景執行，完成前候選列維持前一次結果（輸入框仍即時顯示注音），完成後才換成 Decoder 的 Top-K 候選，避免查詢期間閃現只有注音的內容；詞典缺失或查詢失敗時才顯示原始注音 fallback。候選列依文字合併、每組保留分數最低者，raw 注音候選獨立保留。
 - 游標前的未選注音恰好構成一個完整音節時（例如 `ㄓㄨ`、`ㄒㄧㄢ`），該音節所有完全匹配的單字候選會以 decoder 分數排序接在 Top-K 與 raw 注音 fallback 之後，不受 Top-K 上限限制；輸入省略聲調時接受所有聲調，已在前段出現過的同字不重複。
 - 候選列可水平捲動；右側箭頭按鈕展開後候選列保留為第一列並鎖住捲動：顯示不完全的候選會被漸變加大的間距推出可見區域，完整可見的候選維持原本大小並撐滿第一列，被推出的候選與其他放不下的候選一起以滑入動畫出現在下方列表；列表選項維持原本寬度、自動換行排列，每列數量隨寬度變動，只有單一選項寬於整個列表寬度時才會縮小字體（鍵盤高度與按鍵尺寸不變，按鍵區淡出並由覆蓋在上方的候選列表取代）。選字或候選清單變空時會自動收合；鍵盤的 decoder 上限為 30 個候選，`KeyboardCore` 的預設仍為 10。
 - 候選只查詢游標前的未選注音音節串：以方向鍵把游標移到 `ㄓㄨˋ` 之後，候選列只出現 `ㄓㄨˋ` 的候選；長按方向鍵可連續移動游標；選字後游標移至 composition 結尾，並接著查詢剩下的未選音節。
@@ -137,7 +137,7 @@ Generated/                     編譯產物（SQLite 詞典與 report）
 - `LexiconChineseInputPipeline` 在初始化時建立並長期持有 store、parser、matcher 與 decoder，把 Top-K 結果轉成精簡的 `InputCandidate`；轉換時依文字合併候選、每組保留分數最低者，raw 注音候選不受合併影響，並在必要時補上 raw 注音候選；若游標前輸入是全範圍的完整單一音節，再從 store 取出該音節所有單字詞條、以同一 scorer 計分後接在最後。
 - 排序由可替換的 `DecoderScorer` 負責，目前 `BaselineDecoderScorer` 使用 Essay 詞頻 `sourceWeight`、Terra 讀音可信度 `pronunciationWeight`、parser cost 與簡易分詞懲罰，不是完整的語言模型排序。
 
-`FlickZhuyinKeyboard/ChineseInputCoordinator.swift` 負責非同步協調：每次 pending tokens 改變就增加 revision、先發布 raw fallback，背景完成後只在 revision 與 token snapshot 都相符時套用結果；`KeyboardDocumentClient` 與 `DocumentEffectApplier` 隔離 `UITextDocumentProxy`，`CandidateBarView` 以水平 `UICollectionView` 提供固定高度的候選列與展開按鈕，`ExpandedCandidateView` 以垂直 `UICollectionView` 提供展開後的候選列表，兩者都只建立可見範圍的 cell，選項依原寬度自動換行排列。
+`FlickZhuyinKeyboard/ChineseInputCoordinator.swift` 負責非同步協調：每次 pending tokens 改變就增加 revision 並進入 loading，但保留既有候選直到新結果抵達，背景完成後只在 revision 與 token snapshot 都相符時套用結果；詞典缺失或查詢失敗時才發布 raw 注音 fallback。`KeyboardDocumentClient` 與 `DocumentEffectApplier` 隔離 `UITextDocumentProxy`，`CandidateBarView` 以水平 `UICollectionView` 提供固定高度的候選列與展開按鈕，`ExpandedCandidateView` 以垂直 `UICollectionView` 提供展開後的候選列表，兩者都只建立可見範圍的 cell，選項依原寬度自動換行排列。
 
 pinned Terra 詞典經過碼表最小化，常見詞如「注音」「你好」原本屬於 Rime 的 preset vocabulary，未包含在 `terra_pinyin.dict.yaml` 中。編譯器改以 pinned Rime Essay 補齊這些常用詞：Terra 提供字音、多音字與明確詞條，Essay 提供常用詞與詞頻；沒有 Terra 明確讀音的 Essay 詞條會以各字的 Terra 單字讀音離線自動標音。自動標音時，若某字已有正權重讀音，Terra 明確標為 `0%` 的罕見讀音不參與組合（未標權重的讀音仍會保留，例如「於」合成「於是」只會得到 `ㄩˊ ㄕˋ`）；只有當所有讀音皆為 `0%` 或未標權重時，才保留全部讀音作為 fallback。合併後的 SQLite 以 `(text, base_key, tone_key)` 為唯一鍵，Essay 詞頻經 log1p 正規化為 `source_weight`，因此「注音」「你好」等詞是帶權重的單一詞條，而不是多個無權重單字臨時拼接。schema v4 把詞頻與發音可信度分開：`source_weight` 只存 Essay 詞頻，`pronunciation_weight` 存 Terra 的讀音權重；Terra 單字讀音低於 5% 時以 5% 為下限（例如「於」的 `ㄨˉ` 保留為 0.05，不再被 Essay 詞頻放大），Runtime 成本為詞頻成本加 `-log(pronunciation_weight)`。schema v4 也為每個 canonical 讀音寫入 `initial_key`（每個音節第一個注音符號，以 U+001F 分隔）並建立 `pronunciation_initial_key` 索引，供聲母縮寫與完整／縮寫混合的 pattern 查詢等值掃描。無法標音或超過組合上限的詞條會統計在編譯報告中，不會靜默遺失。
 
@@ -173,7 +173,7 @@ xcodebuild \
 - `ㄅ`、`ㄅㄅ` 的漢字候選、exact 候選優先於聲母縮寫候選、高頻縮寫候選優先與 raw 注音保留
 - 混合完整音節與縮寫的 `ㄅㄨㄓㄉ` 會以單一詞邊查到「不知道」並排在首位，`ㄓㄉ`、`ㄎㄧㄎ` 也會查到「知道」「可以看」，且 raw 注音仍保留
 - 選擇聲母縮寫候選後刪除會還原原始聲母 tokens
-- coordinator 的 stale result 防護、invalidate 與初始化失敗 fallback
+- coordinator 的 stale result 防護、載入期間保留既有候選、invalidate 與初始化失敗 fallback
 - document effect applier 的 UTF-16 selection、替換 marked text 與提交順序
 - 候選列與展開列表只建立可見範圍的 cell、第一列可見數計算與展開／收合狀態
 - 「注音」在有聲調與無聲調輸入下都出現在 Top 10，且來自單一詞典詞條

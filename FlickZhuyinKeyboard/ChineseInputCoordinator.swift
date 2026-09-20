@@ -50,13 +50,10 @@ final class ChineseInputCoordinator {
         }
 
         pendingSnapshot = tokens
-        candidates = [
-            InputCandidate.rawFallback(tokens: tokens, score: .greatestFiniteMagnitude)
-        ].compactMap { $0 }
         state = .loading
-        notify()
 
         guard !pipelineUnavailable else {
+            candidates = rawCandidates(for: tokens)
             state = .fallback(.pipelineUnavailable)
             notify()
             return
@@ -67,6 +64,7 @@ final class ChineseInputCoordinator {
             pipeline = try resolvedPipeline()
         } catch {
             pipelineUnavailable = true
+            candidates = rawCandidates(for: tokens)
             state = .fallback(.pipelineUnavailable)
             logFailure(.pipelineUnavailable)
             notify()
@@ -121,9 +119,15 @@ final class ChineseInputCoordinator {
         tokens: [ZhuyinInputToken]
     ) {
         guard requestRevision == revision, pendingSnapshot == tokens else { return }
+        candidates = rawCandidates(for: tokens)
         state = .fallback(failure)
         logFailure(failure)
         notify()
+    }
+
+    private func rawCandidates(for tokens: [ZhuyinInputToken]) -> [InputCandidate] {
+        [InputCandidate.rawFallback(tokens: tokens, score: .greatestFiniteMagnitude)]
+            .compactMap { $0 }
     }
 
     private func logFailure(_ failure: ChineseInputFailure) {
