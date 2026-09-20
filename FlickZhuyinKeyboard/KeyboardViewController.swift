@@ -123,40 +123,53 @@ final class KeyboardViewController: UIInputViewController {
         mainStack.addArrangedSubview(candidateBar)
         self.candidateBar = candidateBar
 
-        let grid = UIStackView()
-        grid.axis = .vertical
-        grid.spacing = 7
-        grid.distribution = .fillEqually
-        keyGrid = grid
+        let leftColumn = makeColumn()
+        leftColumn.addArrangedSubview(makeGridSpacer())
+        leftColumn.addArrangedSubview(makeButton(for: .cursorLeft))
+        leftColumn.addArrangedSubview(makeEmojiButton())
+        leftColumn.addArrangedSubview(makeButton(for: .modeSwitch))
+
+        let inputKeys = makeColumn()
         for rowIndex in 0..<3 {
             let row = makeRow()
-            let leadingColumn: UIView = switch rowIndex {
-            case 1: makeButton(for: .cursorLeft)
-            case 2: makeEmojiButton()
-            default: makeGridSpacer()
-            }
-            row.addArrangedSubview(leadingColumn)
             for mapping in ZhuyinLayout.groups[(rowIndex * 3)..<(rowIndex * 3 + 3)] {
                 row.addArrangedSubview(makeZhuyinControl(mapping))
             }
-            let trailingColumn: UIView = switch rowIndex {
-            case 0: makeButton(for: .delete)
-            case 1: makeButton(for: .cursorRight)
-            default: makeButton(for: .return)
-            }
-            row.addArrangedSubview(trailingColumn)
-            grid.addArrangedSubview(row)
+            inputKeys.addArrangedSubview(row)
         }
-
-        let spaceRow = makeRow()
-        spaceRow.addArrangedSubview(makeButton(for: .modeSwitch))
-        spaceRow.addArrangedSubview(makeToneControl())
-        spaceRow.addArrangedSubview(makeZhuyinControl(ZhuyinLayout.nasalFinals))
+        let toneRow = makeRow()
+        toneRow.addArrangedSubview(makeToneControl())
+        toneRow.addArrangedSubview(makeZhuyinControl(ZhuyinLayout.nasalFinals))
         let punctuationButton = makePunctuationControl()
-        spaceRow.addArrangedSubview(punctuationButton)
+        toneRow.addArrangedSubview(punctuationButton)
         self.punctuationButton = punctuationButton
-        spaceRow.addArrangedSubview(makeGridSpacer())
-        grid.addArrangedSubview(spaceRow)
+        inputKeys.addArrangedSubview(toneRow)
+
+        let editKeys = makeColumn()
+        editKeys.addArrangedSubview(makeButton(for: .delete))
+        editKeys.addArrangedSubview(makeButton(for: .cursorRight))
+
+        let rightColumn = makeColumn()
+        rightColumn.addArrangedSubview(editKeys)
+        rightColumn.addArrangedSubview(makeButton(for: .return))
+
+        let grid = UIStackView()
+        grid.axis = .horizontal
+        grid.spacing = 7
+        grid.addArrangedSubview(leftColumn)
+        grid.addArrangedSubview(inputKeys)
+        grid.addArrangedSubview(rightColumn)
+        keyGrid = grid
+
+        NSLayoutConstraint.activate([
+            rightColumn.widthAnchor.constraint(equalTo: leftColumn.widthAnchor),
+            inputKeys.widthAnchor.constraint(
+                equalTo: leftColumn.widthAnchor,
+                multiplier: 3,
+                constant: grid.spacing * 2
+            )
+        ])
+
         mainStack.addArrangedSubview(grid)
 
         let expandedCandidates = ExpandedCandidateView()
@@ -288,6 +301,14 @@ final class KeyboardViewController: UIInputViewController {
     private func makeRow() -> UIStackView {
         let stack = UIStackView()
         stack.axis = .horizontal
+        stack.spacing = 7
+        stack.distribution = .fillEqually
+        return stack
+    }
+
+    private func makeColumn() -> UIStackView {
+        let stack = UIStackView()
+        stack.axis = .vertical
         stack.spacing = 7
         stack.distribution = .fillEqually
         return stack
