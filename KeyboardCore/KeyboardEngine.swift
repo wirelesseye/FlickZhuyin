@@ -49,6 +49,9 @@ struct KeyboardEngine: Sendable {
             guard mode == .zhuyin else { return .none }
             composition.insertSymbol(character)
             return activeRunUpdate()
+        case let .digit(character):
+            guard mode == .number else { return .none }
+            return KeyboardUpdate(documentEffects: [.insertText(String(character))])
         case let .tone(tone):
             guard mode == .zhuyin, composition.applyTone(tone) else { return .none }
             return activeRunUpdate()
@@ -106,8 +109,27 @@ struct KeyboardEngine: Sendable {
                     documentEffects: hadComposition ? [.unmarkText] : [],
                     invalidatesCandidates: hadComposition
                 )
+            case .number:
+                mode = .abc
+                return .none
             case .abc:
                 mode = .zhuyin
+                return .none
+            }
+        case .numberSwitch:
+            switch mode {
+            case .zhuyin:
+                let hadComposition = !composition.isEmpty
+                composition = ZhuyinComposition()
+                mode = .number
+                return KeyboardUpdate(
+                    documentEffects: hadComposition ? [.unmarkText] : [],
+                    invalidatesCandidates: hadComposition
+                )
+            case .number:
+                mode = .zhuyin
+                return .none
+            case .abc:
                 return .none
             }
         }

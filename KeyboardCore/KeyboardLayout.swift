@@ -15,3 +15,13 @@ enum KeyboardLayout {
         .nextKeyboard, .space, .return
     ]
 }
+
+enum NumberLayout {
+    static let rows: [[Character]] = [
+        Array("123"),
+        Array("456"),
+        Array("789")
+    ]
+
+    static let zero: Character = "0"
+}

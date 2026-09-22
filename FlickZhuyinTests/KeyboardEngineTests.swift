@@ -206,6 +206,67 @@ final class KeyboardEngineTests: XCTestCase {
         XCTAssertEqual(engine.mode, .zhuyin)
     }
 
+    func testNumberLayout() {
+        XCTAssertEqual(NumberLayout.rows, [Array("123"), Array("456"), Array("789")])
+        XCTAssertEqual(NumberLayout.zero, "0")
+    }
+
+    func testNumberModeInsertsDigits() {
+        var engine = KeyboardEngine(mode: .number)
+        XCTAssertEqual(
+            engine.update(for: .digit("5")),
+            KeyboardUpdate(documentEffects: [.insertText("5")])
+        )
+        XCTAssertEqual(
+            engine.update(for: .digit("0")),
+            KeyboardUpdate(documentEffects: [.insertText("0")])
+        )
+        XCTAssertTrue(engine.composition.isEmpty)
+    }
+
+    func testDigitIsIgnoredOutsideNumberMode() {
+        var zhuyinEngine = KeyboardEngine()
+        XCTAssertEqual(zhuyinEngine.update(for: .digit("1")), .none)
+        var abcEngine = KeyboardEngine(mode: .abc)
+        XCTAssertEqual(abcEngine.update(for: .digit("1")), .none)
+    }
+
+    func testZhuyinToNumberSwitchCommitsComposition() {
+        var engine = KeyboardEngine()
+        _ = engine.update(for: .zhuyin("ㄅ"))
+        let update = engine.update(for: .numberSwitch)
+        XCTAssertEqual(update.documentEffects, [.unmarkText])
+        XCTAssertTrue(update.invalidatesCandidates)
+        XCTAssertEqual(engine.mode, .number)
+        XCTAssertTrue(engine.composition.isEmpty)
+    }
+
+    func testNumberToZhuyinSwitchProducesNoEffects() {
+        var engine = KeyboardEngine(mode: .number)
+        XCTAssertEqual(engine.update(for: .numberSwitch), .none)
+        XCTAssertEqual(engine.mode, .zhuyin)
+    }
+
+    func testNumberSwitchFromABCProducesNoEffects() {
+        var engine = KeyboardEngine(mode: .abc)
+        XCTAssertEqual(engine.update(for: .numberSwitch), .none)
+        XCTAssertEqual(engine.mode, .abc)
+    }
+
+    func testModeSwitchFromNumberGoesToABC() {
+        var engine = KeyboardEngine(mode: .number)
+        XCTAssertEqual(engine.update(for: .modeSwitch), .none)
+        XCTAssertEqual(engine.mode, .abc)
+    }
+
+    func testNumberModeControlKeys() {
+        var engine = KeyboardEngine(mode: .number)
+        XCTAssertEqual(engine.update(for: .space), KeyboardUpdate(documentEffects: [.insertText(" ")]))
+        XCTAssertEqual(engine.update(for: .return), KeyboardUpdate(documentEffects: [.insertText("\n")]))
+        XCTAssertEqual(engine.update(for: .delete), KeyboardUpdate(documentEffects: [.deleteBackward]))
+        XCTAssertEqual(engine.update(for: .nextKeyboard), KeyboardUpdate(documentEffects: [.showInputModeList]))
+    }
+
     private func letters(in row: [KeyboardKey]) -> String {
         String(row.compactMap { key in
             guard case let .letter(character) = key else { return nil }

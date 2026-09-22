@@ -58,7 +58,7 @@ xcodebuild \
 
 Swift 測試涵蓋：
 
-- 鍵盤狀態機：ABC 大小寫與 Caps Lock、Flick 方向映射、第一至第四聲與獨立輕聲、聲調保留與連續聲調取代、候選選擇／刪除／Return／空白與模式切換的 effect 順序
+- 鍵盤狀態機：ABC 大小寫與 Caps Lock、數字模式輸入、中文／數字／ABC 模式切換、Flick 方向映射、第一至第四聲與獨立輕聲、聲調保留與連續聲調取代、候選選擇／刪除／Return／空白與模式切換的 effect 順序
 - Composition：inline marked text 組合、已選 chunk 撤銷與 source token 還原、音調鍵顯示
 - 音節格切分、incomplete／fallback 連通性、完整／聲母縮寫雙重解讀與 eligible edge 判定
 - 詞格的多字詞、去重、展開上限，以及 pattern lookup 的記憶化、result／scan limit、cheapest-segmentation 去重與 exact／initial 去重

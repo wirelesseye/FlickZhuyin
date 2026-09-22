@@ -74,6 +74,7 @@ final class KeyboardViewController: UIInputViewController {
 
         switch engine.mode {
         case .zhuyin: buildZhuyinKeyboard()
+        case .number: buildNumberKeyboard()
         case .abc: buildABCKeyboard()
         }
         refreshUI()
@@ -111,6 +112,14 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func buildZhuyinKeyboard() {
+        buildGridKeyboard(mode: .zhuyin)
+    }
+
+    private func buildNumberKeyboard() {
+        buildGridKeyboard(mode: .number)
+    }
+
+    private func buildGridKeyboard(mode: KeyboardMode) {
         let mainStack = pinnedVerticalStack(spacing: 7)
 
         let candidateBar = CandidateBarView()
@@ -124,22 +133,37 @@ final class KeyboardViewController: UIInputViewController {
         self.candidateBar = candidateBar
 
         let leftColumn = makeColumn()
-        leftColumn.addArrangedSubview(makeGridSpacer())
+        leftColumn.addArrangedSubview(makeButton(for: .numberSwitch))
         leftColumn.addArrangedSubview(makeButton(for: .cursorLeft))
         leftColumn.addArrangedSubview(makeEmojiButton())
         leftColumn.addArrangedSubview(makeButton(for: .modeSwitch))
 
         let inputKeys = makeColumn()
-        for rowIndex in 0..<3 {
-            let row = makeRow()
-            for mapping in ZhuyinLayout.groups[(rowIndex * 3)..<(rowIndex * 3 + 3)] {
-                row.addArrangedSubview(makeZhuyinControl(mapping))
+        switch mode {
+        case .zhuyin:
+            for rowIndex in 0..<3 {
+                let row = makeRow()
+                for mapping in ZhuyinLayout.groups[(rowIndex * 3)..<(rowIndex * 3 + 3)] {
+                    row.addArrangedSubview(makeZhuyinControl(mapping))
+                }
+                inputKeys.addArrangedSubview(row)
             }
-            inputKeys.addArrangedSubview(row)
+        case .number:
+            for row in NumberLayout.rows {
+                let rowStack = makeRow()
+                row.forEach { rowStack.addArrangedSubview(makeButton(for: .digit($0))) }
+                inputKeys.addArrangedSubview(rowStack)
+            }
+        case .abc:
+            break
         }
         let toneRow = makeRow()
         toneRow.addArrangedSubview(makeToneControl())
-        toneRow.addArrangedSubview(makeZhuyinControl(ZhuyinLayout.nasalFinals))
+        if mode == .number {
+            toneRow.addArrangedSubview(makeButton(for: .digit(NumberLayout.zero)))
+        } else {
+            toneRow.addArrangedSubview(makeZhuyinControl(ZhuyinLayout.nasalFinals))
+        }
         let punctuationButton = makePunctuationControl()
         toneRow.addArrangedSubview(punctuationButton)
         self.punctuationButton = punctuationButton
@@ -184,14 +208,6 @@ final class KeyboardViewController: UIInputViewController {
             expandedCandidates.bottomAnchor.constraint(equalTo: grid.bottomAnchor)
         ])
         expandedCandidatesView = expandedCandidates
-    }
-
-    private func makeGridSpacer() -> UIView {
-        let spacer = UIView()
-        spacer.isUserInteractionEnabled = false
-        spacer.backgroundColor = .clear
-        spacer.accessibilityElementsHidden = true
-        return spacer
     }
 
     private func makeEmojiButton() -> KeyboardButton {
@@ -339,8 +355,11 @@ final class KeyboardViewController: UIInputViewController {
         button.accessibilityLabel = accessibilityLabel(for: key)
         button.normalColor = KeyboardButton.standardKeyColor
 
-        if case .letter = key {
+        switch key {
+        case .letter, .digit:
             button.titleLabel?.font = .systemFont(ofSize: 24, weight: .regular)
+        default:
+            break
         }
 
         if key == .nextKeyboard {
@@ -487,7 +506,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func refreshUI() {
-        if engine.mode == .zhuyin {
+        if engine.mode != .abc {
             refreshCandidates()
             let hasPending = engine.hasActiveTokens
             if hasPending {
@@ -546,6 +565,8 @@ final class KeyboardViewController: UIInputViewController {
                         ? String(character).lowercased()
                         : String(character).uppercased()
                     button.setTitle(title, for: .normal)
+                case let .digit(character):
+                    button.setTitle(String(character), for: .normal)
                 case .shift:
                     let symbol: String
                     switch engine.letterCase {
@@ -571,7 +592,10 @@ final class KeyboardViewController: UIInputViewController {
                 case .return:
                     updateReturnKeyFace(button)
                 case .modeSwitch:
-                    button.setTitle(engine.mode == .zhuyin ? "ABC" : "中", for: .normal)
+                    button.setTitle(engine.mode == .abc ? "中" : "ABC", for: .normal)
+                    button.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
+                case .numberSwitch:
+                    button.setTitle(engine.mode == .zhuyin ? "123" : "中", for: .normal)
                     button.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
                 case let .tone(tone):
                     button.setAttributedTitle(
@@ -599,7 +623,7 @@ final class KeyboardViewController: UIInputViewController {
     private func updateKeyboardHeight() {
         let compact = traitCollection.verticalSizeClass == .compact
         switch engine.mode {
-        case .zhuyin: heightConstraint?.constant = compact ? 220 : 280
+        case .zhuyin, .number: heightConstraint?.constant = compact ? 220 : 280
         case .abc: heightConstraint?.constant = compact ? 190 : 230
         }
     }
@@ -678,7 +702,8 @@ final class KeyboardViewController: UIInputViewController {
 
     private func accessibilityLabel(for key: KeyboardKey) -> String {
         switch key {
-        case let .letter(character), let .zhuyin(character): String(character)
+        case let .letter(character), let .zhuyin(character), let .digit(character):
+            String(character)
         case let .tone(tone): tone == .first ? "第一聲" : tone.symbol
         case .shift: "Shift"
         case .delete: "Delete"
@@ -687,7 +712,8 @@ final class KeyboardViewController: UIInputViewController {
         case .space: "Space"
         case .return: "Return"
         case .nextKeyboard: "Next keyboard"
-        case .modeSwitch: engine.mode == .zhuyin ? "切換 ABC" : "切換中文"
+        case .modeSwitch: engine.mode == .abc ? "切換中文" : "切換 ABC"
+        case .numberSwitch: engine.mode == .zhuyin ? "切換數字模式" : "切換中文"
         }
     }
 }

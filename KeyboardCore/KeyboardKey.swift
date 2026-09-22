@@ -3,6 +3,7 @@ import Foundation
 enum KeyboardKey: Equatable, Sendable {
     case letter(Character)
     case zhuyin(Character)
+    case digit(Character)
     case tone(MandarinTone)
     case shift
     case delete
@@ -12,6 +13,7 @@ enum KeyboardKey: Equatable, Sendable {
     case `return`
     case nextKeyboard
     case modeSwitch
+    case numberSwitch
 }
 
 enum DocumentEffect: Equatable, Sendable {
@@ -43,5 +45,6 @@ enum LetterCaseState: Equatable, Sendable {
 
 enum KeyboardMode: Equatable, Sendable {
     case zhuyin
+    case number
     case abc
 }
