@@ -46,7 +46,7 @@ pinned Terra 詞典經過碼表最小化，常見詞如「注音」「你好」�
 
 ## 建置與測試
 
-在 Xcode 中選擇 `FlickZhuyin` scheme 後執行 Build 或 Test，或使用命令列（將 `name` 替換成 Xcode 中現有的 iPhone 模擬器）：
+建置或測試前需先產生 `Generated/flickzhuyin.sqlite3`（見 [詞典編譯](#詞典編譯)），否則 bundle 資源與依賴 production 詞典的測試會失敗。在 Xcode 中選擇 `FlickZhuyin` scheme 後執行 Build 或 Test，或使用命令列（將 `name` 替換成 Xcode 中現有的 iPhone 模擬器）：
 
 ```sh
 xcodebuild \
@@ -103,6 +103,8 @@ python3 Tools/DictionaryCompiler/compile_dictionary.py build \
   --report Generated/dictionary-report.json
 ```
 
+產物 `Generated/flickzhuyin.sqlite3` 不納入版控，clone 後必須先執行此步驟才能建置或測試；`Generated/dictionary-report.json` 雖由 build 產生但仍納入版控，供 production 詞典測試比對。
+
 編譯流程：
 
 - 編譯器先編譯 Terra，建立完整詞與單字讀音索引；Essay 詞條優先使用 Terra 明確詞讀音，否則以單字讀音自動組合，每個詞最多保留 16 組讀音，超過上限會記錄於 report。合成時排除該字已有正權重讀音時 Terra 明確標為 `0%` 的讀音，排除數量記於 report 的 `excludedZeroWeightReadings`；Terra 單字本身的 `0%` 讀音仍會保留在詞典中。
@@ -130,9 +132,9 @@ python3 Tools/DictionaryCompiler/compile_dictionary.py build \
 
 加入 Essay、讀音 provenance 與聲母索引後 production 資料庫約 165 MB（仍在 256 MB 上限內）。Extension 啟動仍只把音節 inventory 載入記憶體，詞條查詢維持依 `base_key` 與 `syllable_count`、pattern 查詢依 `initial_key` 與 `syllable_count` 使用索引，掃描量與單次回傳數都有硬上限，pattern 結果與掃描列另有具上限的 LRU cache。
 
-## 資源檔案與 Git LFS
+## 資源檔案
 
-`Generated/flickzhuyin.sqlite3` 是鍵盤執行所需的可重現資源，因此不加入 `.gitignore`；由於檔案超過 GitHub 一般 Git blob 的 100 MB 限制，repository 透過 Git LFS 追蹤它。clone 後需安裝 Git LFS 才能取得完整資料庫。
+`Generated/flickzhuyin.sqlite3` 是鍵盤執行所需的可重現資源，但不納入版控：`.gitignore` 忽略它，歷史中也不存在任何版本。原因是它可由 pinned `Vendor/` 來源離線重建（見 [詞典編譯](#詞典編譯)），且檔案超過 GitHub 一般 Git blob 的 100 MB 限制。clone 或刪除 `Generated/` 後，建置與測試前必須先執行 `build`；`Generated/dictionary-report.json` 與 `Generated/LICENSE.md` 仍納入版控。
 
 ## 第三方資料
 
