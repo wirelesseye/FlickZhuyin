@@ -46,3 +46,6 @@ __pycache__/
 *.sqlite3-journal
 *.sqlite3-wal
 *.sqlite3-shm
+
+# Generated
+Generated/flickzhuyin.sqlite3
