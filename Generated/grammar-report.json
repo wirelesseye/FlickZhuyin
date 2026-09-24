@@ -1,0 +1,36 @@
+{
+  "keyCount": 4541524,
+  "droppedKeys": 119659,
+  "keyLengthHistogram": {
+    "2": 497435,
+    "3": 1653164,
+    "4": 1751891,
+    "5": 447269,
+    "6": 162258,
+    "7": 20734,
+    "8": 8773
+  },
+  "valueRange": {
+    "minimum": 69077,
+    "maximum": 190406
+  },
+  "format": {
+    "formatVersion": 1,
+    "blockSize": 16,
+    "valueBase": 69077,
+    "valueShift": 1
+  },
+  "output": {
+    "bytes": 37268600,
+    "sha256": "f7a5f8f5ec24de000de43f410711175efa34e945f0d83b064243a3b8ec0419dd",
+    "limitBytes": 67108864
+  },
+  "source": {
+    "path": "zh-hant-t-essay-bgw.gram",
+    "sha256": "0488ebd6688f900a39200f2b794f2f99bcbf1e8fc27280ae4a2324b08b1559c1",
+    "repository": "https://github.com/lotem/rime-octagram-data",
+    "commit": "97bf55046aad163c3d1881abae5312040b1bbed9",
+    "formatVersion": "1"
+  },
+  "compilerVersion": 1
+}

@@ -15,6 +15,13 @@ struct DecoderConfiguration: Equatable, Sendable {
     var completeRawCost = 12.0
     var incompleteRawCost = 16.0
     var fallbackRawCost = 20.0
+    /// Scales the grammar cost `-query` (see `GrammarModel`). As in librime,
+    /// every segment pays the no-collocation penalty unless it forms a known
+    /// collocation, which keeps the search from splitting input into many
+    /// short words.
+    var grammarWeight = 1.0
+    /// Partial sentences kept at each position when decoding with a grammar.
+    var beamWidth = 5
 
     func validate() throws {
         guard maximumCandidates > 0 else {
@@ -29,11 +36,15 @@ struct DecoderConfiguration: Equatable, Sendable {
             ("completeRawCost", completeRawCost),
             ("incompleteRawCost", incompleteRawCost),
             ("fallbackRawCost", fallbackRawCost),
+            ("grammarWeight", grammarWeight),
         ]
         for (name, value) in costs {
             guard value.isFinite, value >= 0 else {
                 throw DecoderError.invalidConfiguration("\(name) must be finite and non-negative")
             }
+        }
+        guard beamWidth > 0 else {
+            throw DecoderError.invalidConfiguration("beamWidth must be greater than zero")
         }
     }
 }
@@ -41,27 +52,55 @@ struct DecoderConfiguration: Equatable, Sendable {
 struct Decoder: Sendable {
     let scorer: any DecoderScorer
     let configuration: DecoderConfiguration
+    let grammar: (any GrammarModel)?
 
     init(
         scorer: any DecoderScorer = BaselineDecoderScorer(),
-        configuration: DecoderConfiguration = DecoderConfiguration()
+        configuration: DecoderConfiguration = DecoderConfiguration(),
+        grammar: (any GrammarModel)? = nil
     ) {
         self.scorer = scorer
         self.configuration = configuration
+        self.grammar = grammar
     }
 
-    init(configuration: DecoderConfiguration) {
-        self.init(scorer: BaselineDecoderScorer(configuration: configuration), configuration: configuration)
+    init(configuration: DecoderConfiguration, grammar: (any GrammarModel)? = nil) {
+        self.init(
+            scorer: BaselineDecoderScorer(configuration: configuration),
+            configuration: configuration,
+            grammar: grammar
+        )
     }
 
-    func decode(syllableLattice: SyllableLattice, wordLattice: WordLattice) throws -> [DecodedCandidate] {
+    /// Decodes whole-input candidates. `precedingText` is committed text to the
+    /// left of the input; it only matters when a grammar is present.
+    func decode(
+        syllableLattice: SyllableLattice,
+        wordLattice: WordLattice,
+        precedingText: String = ""
+    ) throws -> [DecodedCandidate] {
         try configuration.validate()
         try Self.validate(syllableLattice: syllableLattice, wordLattice: wordLattice)
         let tokenCount = syllableLattice.tokenCount
         guard tokenCount > 0 else { return [] }
         let transitions = try buildTransitions(syllableLattice: syllableLattice, wordLattice: wordLattice)
         try Self.verifyConnectivity(transitions: transitions, tokenCount: tokenCount)
+        if let grammar {
+            let paths = try beamSearchPaths(
+                transitions: transitions,
+                tokenCount: tokenCount,
+                grammar: grammar,
+                precedingText: precedingText
+            )
+            return try Self.candidates(from: paths, tokenCount: tokenCount)
+        }
         return try decodePaths(transitions: transitions, tokenCount: tokenCount)
+    }
+
+    /// The grammar cost of `word` after `context`, as `grammarWeight × -query`.
+    func grammarCost(context: String, word: String, isRear: Bool) -> Double {
+        guard let grammar else { return 0 }
+        return -configuration.grammarWeight * grammar.query(context: context, word: word, isRear: isRear)
     }
 
     private static func validate(syllableLattice: SyllableLattice, wordLattice: WordLattice) throws {
@@ -188,9 +227,13 @@ struct Decoder: Sendable {
                 limit: configuration.maximumCandidates
             )
         }
+        return try Self.candidates(from: best[0], tokenCount: tokenCount)
+    }
+
+    private static func candidates(from paths: [DecodedPath], tokenCount: Int) throws -> [DecodedCandidate] {
         var candidates: [DecodedCandidate] = []
-        candidates.reserveCapacity(best[0].count)
-        for path in best[0] {
+        candidates.reserveCapacity(paths.count)
+        for path in paths {
             guard path.score.isFinite else {
                 throw DecoderError.scoringFailed("decoded path score is not finite")
             }
@@ -205,6 +248,85 @@ struct Decoder: Sendable {
             )
         }
         return candidates
+    }
+
+    /// Forward beam search in the style of librime's `Poet`: each word is
+    /// scored against the text of the (up to) two words before it, so the DP
+    /// state is a partial sentence rather than a position.
+    ///
+    /// Every surviving line is extended by every transition, so extensions
+    /// are kept cheap: a line's strings are built only if it survives pruning.
+    private func beamSearchPaths(
+        transitions: [[PreparedTransition]],
+        tokenCount: Int,
+        grammar: any GrammarModel,
+        precedingText: String
+    ) throws -> [DecodedPath] {
+        var lines = Array(repeating: [BeamLine](), count: tokenCount + 1)
+        lines[0] = [BeamLine(context: precedingText)]
+        var scorers: [String: any GrammarContextScorer] = [:]
+        let window = grammar.contextWindow
+
+        for position in 0..<tokenCount {
+            let beam = Self.survivors(of: lines[position], limit: configuration.beamWidth) {
+                BeamLineIdentity(text: $0.text, pronunciationKey: $0.pronunciationKey, context: $0.context)
+            }
+            lines[position] = []
+            for line in beam {
+                let context = String(String.UnicodeScalarView(line.context.unicodeScalars.suffix(window)))
+                var scorer: (any GrammarContextScorer)?
+                if !context.isEmpty {
+                    if let cached = scorers[context] {
+                        scorer = cached
+                    } else {
+                        let created = grammar.scorer(forContext: context)
+                        scorers[context] = created
+                        scorer = created
+                    }
+                }
+                for prepared in transitions[position] {
+                    let end = prepared.transition.tokenRange.upperBound
+                    // Raw syllables and words without context score the
+                    // no-collocation floor, so every segment pays it.
+                    var score = grammar.nonCollocationPenalty
+                    if let scorer, !prepared.isRaw {
+                        score = scorer.score(word: prepared.transition.text, isRear: end == tokenCount)
+                    }
+                    let grammarCost = -configuration.grammarWeight * score
+                    guard grammarCost.isFinite else {
+                        throw DecoderError.scoringFailed("grammar cost \(grammarCost) is not finite")
+                    }
+                    lines[end].append(
+                        BeamLine(prepared: prepared, predecessor: line, grammarCost: grammarCost)
+                    )
+                }
+            }
+        }
+
+        let finished = Self.survivors(of: lines[tokenCount], limit: configuration.maximumCandidates) {
+            PathKey(text: $0.text, pronunciationKey: $0.pronunciationKey)
+        }
+        return finished.map(\.decodedPath).sorted(by: DecodedPath.orderedBefore)
+    }
+
+    /// The best `limit` lines with distinct identities. Lines are ordered by
+    /// score first, so identities (which build strings) are computed only
+    /// while walking down from the best.
+    private static func survivors<Identity: Hashable>(
+        of lines: [BeamLine],
+        limit: Int,
+        identity: (BeamLine) -> Identity
+    ) -> [BeamLine] {
+        var seen = Set<Identity>()
+        var result: [BeamLine] = []
+        result.reserveCapacity(limit)
+        for line in lines.sorted(by: BeamLine.orderedBefore) {
+            guard result.count < limit else { break }
+            if seen.insert(identity(line)).inserted {
+                result.append(line)
+            }
+        }
+        return result
     }
 
     private static func verifyConnectivity(transitions: [[PreparedTransition]], tokenCount: Int) throws {
@@ -326,10 +448,10 @@ private final class DecodedPath {
 
     static let empty = DecodedPath()
 
-    init(prepared: PreparedTransition, suffix: DecodedPath) {
+    init(prepared: PreparedTransition, suffix: DecodedPath, adjustment: Double = 0) {
         self.prepared = prepared
         self.suffix = suffix
-        score = prepared.transition.cost + suffix.score
+        score = prepared.transition.cost + adjustment + suffix.score
         rawSegmentCount = (prepared.isRaw ? 1 : 0) + suffix.rawSegmentCount
         segmentCount = 1 + suffix.segmentCount
     }
@@ -420,6 +542,102 @@ private final class DecodedPath {
         }
         return "\u{1f}" + trailing
     }
+}
+
+/// A partial sentence in the beam search, linked to the line it extends.
+/// Only the numeric fields are set eagerly; strings are built on demand.
+private final class BeamLine {
+    let prepared: PreparedTransition?
+    let predecessor: BeamLine?
+    let grammarCost: Double
+    let score: Double
+    let rawSegmentCount: Int
+    let segmentCount: Int
+    private let rootContext: String
+
+    init(context: String) {
+        prepared = nil
+        predecessor = nil
+        grammarCost = 0
+        score = 0
+        rawSegmentCount = 0
+        segmentCount = 0
+        rootContext = context
+    }
+
+    init(prepared: PreparedTransition, predecessor: BeamLine, grammarCost: Double) {
+        self.prepared = prepared
+        self.predecessor = predecessor
+        self.grammarCost = grammarCost
+        score = predecessor.score + prepared.transition.cost + grammarCost
+        rawSegmentCount = predecessor.rawSegmentCount + (prepared.isRaw ? 1 : 0)
+        segmentCount = predecessor.segmentCount + 1
+        rootContext = ""
+    }
+
+    lazy var text: String = (predecessor?.text ?? "") + (prepared?.transition.text ?? "")
+
+    lazy var pronunciationKey: String = {
+        guard let prepared else { return "" }
+        let previous = predecessor?.pronunciationKey ?? ""
+        return previous.isEmpty ? prepared.pronunciationKey : previous + "\u{1f}" + prepared.pronunciationKey
+    }()
+
+    /// Grammar context for the next word: the last two words, or the text
+    /// before the input while fewer than two words are decoded. Empty after a
+    /// raw syllable, which has no text to condition on.
+    lazy var context: String = {
+        guard let prepared, let predecessor else { return rootContext }
+        if prepared.isRaw {
+            return ""
+        }
+        if let previousWord = predecessor.prepared {
+            return (previousWord.isRaw ? "" : previousWord.transition.text) + prepared.transition.text
+        }
+        return predecessor.context + prepared.transition.text
+    }()
+
+    var decodedPath: DecodedPath {
+        var path = DecodedPath.empty
+        var node: BeamLine? = self
+        while let current = node, let prepared = current.prepared {
+            path = DecodedPath(prepared: prepared, suffix: path, adjustment: current.grammarCost)
+            node = current.predecessor
+        }
+        return path
+    }
+
+    static func orderedBefore(_ lhs: BeamLine, _ rhs: BeamLine) -> Bool {
+        if lhs.score != rhs.score {
+            return lhs.score < rhs.score
+        }
+        if lhs.rawSegmentCount != rhs.rawSegmentCount {
+            return lhs.rawSegmentCount < rhs.rawSegmentCount
+        }
+        if lhs.segmentCount != rhs.segmentCount {
+            return lhs.segmentCount < rhs.segmentCount
+        }
+        if lhs.text != rhs.text {
+            return lhs.text < rhs.text
+        }
+        if lhs.pronunciationKey != rhs.pronunciationKey {
+            return lhs.pronunciationKey < rhs.pronunciationKey
+        }
+        return lhs.context < rhs.context
+    }
+}
+
+/// Lines with the same text, reading and grammar context score every
+/// continuation identically, so only the best of them needs to stay in the beam.
+private struct BeamLineIdentity: Hashable {
+    let text: String
+    let pronunciationKey: String
+    let context: String
+}
+
+private struct PathKey: Hashable {
+    let text: String
+    let pronunciationKey: String
 }
 
 private struct PathIdentity: Hashable {

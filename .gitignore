@@ -49,3 +49,7 @@ __pycache__/
 
 # Generated
 Generated/flickzhuyin.sqlite3
+
+# Octagram source (fetched by compile_dictionary.py fetch-octagram)
+Vendor/rime-octagram-data/*.gram
+Generated/flickzhuyin.gram

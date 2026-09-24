@@ -35,7 +35,7 @@ final class ChineseInputCoordinator {
         task?.cancel()
     }
 
-    func requestCandidates(for tokens: [ZhuyinInputToken]) {
+    func requestCandidates(for tokens: [ZhuyinInputToken], precedingText: String = "") {
         revision += 1
         let requestRevision = revision
         task?.cancel()
@@ -73,7 +73,7 @@ final class ChineseInputCoordinator {
 
         task = Task { [weak self] in
             do {
-                let result = try await pipeline.candidates(for: tokens)
+                let result = try await pipeline.candidates(for: tokens, precedingText: precedingText)
                 guard !Task.isCancelled else { return }
                 self?.apply(result, requestRevision: requestRevision, tokens: tokens)
             } catch {

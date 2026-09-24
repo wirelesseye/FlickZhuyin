@@ -2,7 +2,7 @@
 
 FlickZhuyin 是一個實驗性的 iOS 自訂注音鍵盤，在九宮格上以類似日文假名鍵盤的 Flick（滑動）操作輸入注音符號。
 
-中文模式已支援注音組字、候選選字與 Inline 顯示，並可與數字模式及全鍵盤 ABC 模式切換；候選排序仍在開發中，尚未提供語言模型自動選字、使用者學習與 iPad 專用版面，詳見「尚未支援」。
+中文模式已支援注音組字、候選選字與 Inline 顯示，並可與數字模式及全鍵盤 ABC 模式切換；候選排序結合詞頻與 n-gram 語言模型（rime-octagram），尚未提供自動選字、使用者學習與 iPad 專用版面，詳見「尚未支援」。
 
 ## 系統需求
 
@@ -25,6 +25,7 @@ FlickZhuyin 是一個實驗性的 iOS 自訂注音鍵盤，在九宮格上以類
 - 中文、數字與全鍵盤 ABC 模式切換
 - Inline 組字：宿主輸入框即時顯示已選文字與未選注音
 - 候選列與可展開的候選網格
+- 語言模型排序：多字輸入依前後詞的搭配重新排序與分詞，並參考游標前已輸入的文字（例如在「天氣」之後輸入 `ㄏㄣˇㄏㄠˇ` 會優先「很好」）
 - 聲母縮寫與混合候選：`ㄅ`、`ㄅㄅ`、`ㄅㄨㄓㄉ` 等輸入可混用完整音節與單符號縮寫，查得「不知道」這類完整詞條
 - 第一至第四聲 Flick 選擇
 - 獨立輕聲鍵
@@ -123,7 +124,8 @@ FlickZhuyin Keyboard Extension：
 - 僅為觸覺回饋要求 Full Access
 - 不使用網路
 - 不儲存或傳送輸入內容
-- 只以唯讀模式查詢 App bundle 內建的 SQLite 詞庫，不寫入資料庫
+- 只以唯讀模式查詢 App bundle 內建的 SQLite 詞庫與語言模型檔，不寫入資料庫
+- 為了候選排序，會讀取游標前最多 8 個連續文字作為語言模型的上下文；只在記憶體中使用，不儲存或傳送
 - App Group 共享容器僅存放偏好設定，不存放輸入內容
 - 不使用雲端同步
 
@@ -131,10 +133,11 @@ FlickZhuyin Keyboard Extension：
 
 ## 第三方資料與授權
 
-中文詞庫由 Rime Terra Pinyin 與 Rime Essay 兩份上游資料轉換而成：
+中文詞庫由 Rime Terra Pinyin 與 Rime Essay 兩份上游資料轉換而成，語言模型則轉換自 rime-octagram-data：
 
 - Terra Pinyin 詞條與讀音依 CC BY-SA 3.0 提供
 - Rime Essay 詞頻依 LGPL-3.0 提供
+- rime-octagram-data 的 n-gram 語言模型依 LGPL-3.0 提供
 
 完整 attribution、修改說明與授權連結見 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，App 內也可從「第三方授權」閱讀。FlickZhuyin 自有程式碼目前未授予開源授權。
 
@@ -142,7 +145,7 @@ FlickZhuyin Keyboard Extension：
 
 - 任意音節前綴匹配（例如以 `ㄅㄧ` 查詢 `ㄅㄧㄝ`）
 - 縮寫比例的成本調整；多個縮寫音節的詞（例如 `ㄨㄓㄉ` 的「我知道」）目前會排在首音節完整輸入的詞之後
-- bigram／語言模型排序與自動選字
+- 自動選字（語言模型目前只用於排序候選）
 - 使用者詞典、學習與持久化
 - 簡繁轉換
 - 符號頁面

@@ -1,0 +1,29 @@
+# Ranking gold set: preceding text<TAB>zhuyin input<TAB>expected first candidate.
+# Tone marks: ˉ ˊ ˇ ˋ ˙; a syllable without a mark is typed without a tone.
+# GrammarProductionIntegrationTests reports top-1 accuracy with and without
+# the language model, and the model must not do worse than the baseline.
+天氣	ㄏㄣˇㄏㄠˇ	很好
+	ㄐㄧㄣㄊㄧㄢㄊㄧㄢㄑㄧˋㄏㄣˇㄏㄠˇ	今天天氣很好
+我們	ㄐㄧㄣㄊㄧㄢ	今天
+	ㄨㄛˇㄕˋㄒㄩㄝˊㄕㄥ	我是學生
+	ㄊㄚㄗㄞˋㄐㄧㄚ	他在家
+我想	ㄔㄈㄢˋ	吃飯
+	ㄇㄧㄥˊㄊㄧㄢㄐㄧㄢˋ	明天見
+	ㄒㄧㄝˋㄒㄧㄝ˙	謝謝
+	ㄓㄜˋㄍㄜ˙ㄨㄣˋㄊㄧˊ	這個問題
+這個	ㄨㄣˋㄊㄧˊ	問題
+	ㄋㄧˇㄏㄠˇㄇㄚ˙	你好嗎
+	ㄉㄚˋㄐㄧㄚㄏㄠˇ	大家好
+	ㄨㄛˇㄞˋㄋㄧˇ	我愛你
+	ㄉㄧㄢˋㄋㄠˇ	電腦
+使用	ㄕㄡˇㄐㄧ	手機
+我去	ㄕㄤˋㄅㄢ	上班
+	ㄧㄍㄜˋㄖㄣˊ	一個人
+沒有	ㄕˊㄐㄧㄢ	時間
+	ㄓㄨˋㄧㄣ	注音
+	ㄑㄧㄥˇㄨㄣˋ	請問
+	ㄨㄛˇㄇㄣ˙ㄧㄑㄧˇㄑㄩˋ	我們一起去
+	ㄊㄚㄇㄣ˙ㄉㄡㄏㄣˇㄍㄠㄒㄧㄥˋ	他們都很高興
+	ㄓㄜˋㄕˋㄨㄛˇㄉㄜ˙ㄕㄨ	這是我的書
+	ㄋㄧˇㄧㄠˋㄏㄜㄕㄨㄟˇㄇㄚ˙	你要喝水嗎
+	ㄨㄛˇㄅㄨˋㄓㄉㄠˋ	我不知道

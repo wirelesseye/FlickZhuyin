@@ -24,6 +24,17 @@ FlickZhuyin 包含由第三方資料轉換而成的中文詞典。以下授權�
 
 使用的原始檔為 `essay.txt`，內容為共用詞彙與出現頻率。FlickZhuyin 以 Terra Pinyin 的讀音為 Essay 詞條離線標音，將詞頻以 log1p 函數正規化後合併進 SQLite 詞典，作為候選排序的權重；無法由 Terra 標音的詞條會被跳過並記錄於編譯報告。轉換工具及來源 manifest 可在 FlickZhuyin repository 的 `Tools/DictionaryCompiler/` 與 `Vendor/rime-essay/` 找到。
 
+## rime-octagram-data
+
+- 名稱：rime-octagram-data（librime-octagram 語法模型資料，`hant` 分支）
+- 作者／維護者：Rime contributors（lotem）
+- 來源：<https://github.com/lotem/rime-octagram-data>
+- 使用版本：commit `97bf55046aad163c3d1881abae5312040b1bbed9`
+- 授權：GNU Lesser General Public License v3.0
+- 授權全文：隨 App 一併提供的 `LICENSE`，或 <https://www.gnu.org/licenses/lgpl-3.0.html>
+
+使用的原始檔為 `zh-hant-t-essay-bgw.gram`，內容為以詞為單位的繁體中文 n-gram 統計。FlickZhuyin 將其 darts 雙陣列 trie 解碼為 n-gram 與分數，移除執行期不會查詢的句首（`$` 開頭）條目，改以 UTF-8 重新排序、分區塊前綴壓縮並以 16 位元量化分數，封裝為 `flickzhuyin.gram`。評分方式移植自 BSD 授權的 librime-octagram（<https://github.com/lotem/librime-octagram>）。轉換工具及來源 manifest 可在 FlickZhuyin repository 的 `Tools/DictionaryCompiler/` 與 `Vendor/rime-octagram-data/` 找到。
+
 ## CC-CEDICT-derived dictionary data
 
 Terra Pinyin 的詞典 header 說明其參考 CC-CEDICT，並將詞典資料標示為 Creative Commons Attribution-ShareAlike 3.0 Unported（CC BY-SA 3.0）。

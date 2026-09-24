@@ -82,6 +82,19 @@ struct ZhuyinComposition: Equatable, Sendable {
         pieces[activeTokenRange].compactMap(\.token)
     }
 
+    /// Selected text directly left of the active run, as grammar context.
+    /// `reachesStart` is true when nothing unconverted sits between it and the
+    /// start of the composition, so the document's own text continues it.
+    var precedingContext: (text: String, reachesStart: Bool) {
+        var texts: [String] = []
+        var index = activeTokenRange.lowerBound
+        while index > 0, case let .selected(chunk) = pieces[index - 1] {
+            texts.append(chunk.text)
+            index -= 1
+        }
+        return (texts.reversed().joined(), index == 0)
+    }
+
     var activeTokenText: String {
         activeTokens.map(\.displayText).joined()
     }

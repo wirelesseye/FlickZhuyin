@@ -10,10 +10,11 @@ FlickZhuyinKeyboard/           UIKit Keyboard Extension、按鍵與 Flick UI
 KeyboardCore/                  鍵盤狀態機、按鍵模型及注音配置
 KeyboardCore/ChineseInput/     音節解析、詞庫查詢、詞格與 Top-K 解碼
 FlickZhuyinTests/              狀態機、Flick 映射、中文輸入與效能測試
-Tools/DictionaryCompiler/      Rime 詞典離線編譯器與 Python 測試
+Tools/DictionaryCompiler/      Rime 詞典與語言模型離線編譯器與 Python 測試
 Vendor/rime-terra-pinyin/      鎖定版本的上游詞典、授權與 manifest
 Vendor/rime-essay/             鎖定版本的上游預設詞彙、授權與 manifest
-Generated/                     編譯產物（SQLite 詞典與 report）
+Vendor/rime-octagram-data/     鎖定版本的語言模型 manifest 與授權（.gram 本體需另行下載）
+Generated/                     編譯產物（SQLite 詞典、FZGram 語言模型與 report）
 ```
 
 ## 架構
@@ -27,9 +28,14 @@ Generated/                     編譯產物（SQLite 詞典與 report）
 - `SyllableParser` 從詞庫的合法音節清單建立音節格（syllable lattice），支援省略聲調、部分聲調與完整聲調；可同時作為完整音節與聲母前綴的符號（例如 `ㄓ`）會產生完整與聲母縮寫兩條 edge。
 - `SQLiteLexiconStore` 以唯讀模式開啟 bundle 內的 SQLite 詞典，只把 400 多個合法無調注音載入記憶體。完整注音查詢走 `base_key`，pattern（exact／initial 混合）查詢由 pattern 推導 `initial_key` 後走索引掃描，掃描量受 scan limit 限制，再逐列套用 exact 條件並在收集滿 result limit 後停止；三種查詢各有具上限的 LRU cache。
 - `DictionaryMatcher` 沿音節格以統一的 pattern expansion 查詢詞庫：完整 edge 產生 `.exact`、單符號無調 edge 產生 `.initial`，同一位置可同時保留兩種解讀，全部 exact 時仍走快速 `exactMatches`；pattern 與查詢結果都會記憶化，混合查詢受 `patternMatchResultLimit`／`patternMatchScanLimit` 限制。
-- `Decoder` 將詞格與 raw 注音音節合併成永遠連通的解碼圖，以精確 Top-K DAG 動態規劃輸出穩定排序的候選；沒有詞典匹配的片段會以原始注音保留。
+- `Decoder` 將詞格與 raw 注音音節合併成永遠連通的解碼圖；沒有詞典匹配的片段會以原始注音保留。沒有語言模型時以精確 Top-K DAG 動態規劃輸出穩定排序的候選；有語言模型時改用 librime `Poet` 式的前向 beam search：每個詞以前兩個詞（第一個詞則以游標前文字）為上下文查詢語言模型，每個位置只保留 `beamWidth`（預設 5）個分數最佳且 text／讀音／上下文互異的部分句子，raw 注音音節不計語言模型分數並清空上下文。
+- `MappedGramStore` 以 `mmap` 唯讀映射 `flickzhuyin.gram`（FZGram 格式，見 [語言模型編譯](#語言模型編譯)），頁面為可回收的 file-backed clean pages，不計入 Extension 常駐記憶體；查詢先在區塊前綴索引上二分搜尋，再在 16 個 key 的前綴壓縮區塊內循序比對，同時回報是否存在更長的 key 以便提早中止。
+- `OctagramGrammar` 逐行移植 librime-octagram 的 `Octagram::Query`（預設 `collocation_max_length` 4、`collocation_min_length` 3、penalty −12／−12／−24／−18）：取上下文最後 3 字的各後綴與詞的前 3 字各前綴組成 key，分數為 `value / 10000` 加上 collocation 或 weak collocation penalty，句尾另查 `詞$`；每個上下文建立一個 scorer，快取以詞首字開頭的查詢結果。Decoder 與 librime 相同，把 `grammarWeight × (−分數)` 加進每個分段的 cost：沒有搭配的詞、沒有上下文的第一個詞與 raw 注音音節都付出 no-collocation penalty（預設 12），有搭配時較低；這個每段固定成本也讓搜尋偏好較少的分段。
+
+`FlickZhuyinTests/Fixtures/ranking-gold.tsv` 是代表性的排序 gold set（上下文、注音、預期首選），`GrammarProductionIntegrationTests.testRankingGoldSet` 會輸出無語言模型與多個 `grammarWeight` 下的首選正確數，並要求預設設定不低於無語言模型。目前 25 句中無語言模型 23 句、語言模型 24 句正確（`grammarWeight` 0.2–1.0 結果相同，預設沿用 librime 的 1.0）。曾試過「以 floor 為基準只給獎勵」的形式，會因每多切一段就多一次獎勵而過度分詞（僅 2 句正確），因此改回 librime 的形式。
 - `LexiconChineseInputPipeline` 在初始化時建立並長期持有 store、parser、matcher 與 decoder，把 Top-K 結果轉成精簡的 `InputCandidate`；轉換時依文字合併候選、每組保留分數最低者，raw 注音候選不受合併影響，並在必要時補上 raw 注音候選；若游標前輸入是全範圍的完整單一音節，再從 store 取出該音節所有單字詞條、以同一 scorer 計分後接在最後。
-- 排序由可替換的 `DecoderScorer` 負責，目前 `BaselineDecoderScorer` 使用 Essay 詞頻 `sourceWeight`、Terra 讀音可信度 `pronunciationWeight`、parser cost 與簡易分詞懲罰，不是完整的語言模型排序。
+- 詞本身的 cost 由可替換的 `DecoderScorer` 負責，目前 `BaselineDecoderScorer` 使用 Essay 詞頻 `sourceWeight`、Terra 讀音可信度 `pronunciationWeight`、parser cost 與簡易分詞懲罰；前後詞的搭配由 `GrammarModel` 另外計分。語言模型檔缺失或損毀時 Pipeline 會記錄錯誤並退回無語言模型的排序，輸入不中斷。
+- 語言模型上下文：`ZhuyinComposition.precedingContext` 提供游標前連續的已選文字；若它延伸到組字開頭，`KeyboardViewController` 會在組字開始前讀取 `documentContextBeforeInput`，以 `GrammarContext.tail` 取最後一段連續文字（遇空白、標點或換行即截斷，最多 8 字）接在前面。上下文只存在記憶體中。
 - Keyboard Extension 的 decoder 上限為 30 個候選（`KeyboardViewController.maximumCandidateCount`）；`KeyboardCore` 的 `DecoderConfiguration.maximumCandidates` 預設為 10。
 
 ### Extension 整合
@@ -63,6 +69,7 @@ Swift 測試涵蓋：
 - 音節格切分、incomplete／fallback 連通性、完整／聲母縮寫雙重解讀與 eligible edge 判定
 - 詞格的多字詞、去重、展開上限，以及 pattern lookup 的記憶化、result／scan limit、cheapest-segmentation 去重與 exact／initial 去重
 - Decoder 的 scoring、lattice 驗證、Top-K 限制、去重與 deterministic tie-break
+- 語言模型：FZGram 查詢（跨區塊、延伸判定、損毀檔拒絕）、octagram 評分公式（collocation／weak／句尾／無上下文）、beam search 的上下文傳遞與 raw 音節重置，以及 production 語言模型的代表性排序（`ranking-gold.tsv`）
 - Pipeline 的 fixture 與 production 候選、同文字候選合併、raw fallback 保留、空輸入與錯誤傳遞
 - 完整單一音節輸入會在 Top-K 之後補上該音節所有完全匹配的單字（含省略聲調、超過 Top-K 與去重），多音節輸入不追加
 - 聲母與混合縮寫：`ㄅ`、`ㄅㄅ` 的漢字候選與排序，`ㄅㄨㄓㄉ`、`ㄓㄉ`、`ㄎㄧㄎ` 的詞條查詢，以及縮寫候選刪除後還原原始 tokens
@@ -126,18 +133,53 @@ python3 Tools/DictionaryCompiler/compile_dictionary.py build \
   --report /tmp/flickzhuyin-fixture-report.json
 ```
 
+## 語言模型編譯
+
+語言模型來源為 [rime-octagram-data](https://github.com/lotem/rime-octagram-data) `hant` 分支的 `zh-hant-t-essay-bgw.gram`（約 41 MB，LGPL-3.0）。原始 `.gram` 不納入版控，只有 `Vendor/rime-octagram-data/SOURCE.json` 與 `LICENSE` 納入；clone 後以 manifest 中的 commit 下載（若 commit 與既有 manifest 相同，會驗證 SHA-256 而不改寫 manifest）：
+
+```sh
+python3 Tools/DictionaryCompiler/compile_dictionary.py fetch-octagram \
+  --commit 97bf55046aad163c3d1881abae5312040b1bbed9 \
+  --dest Vendor/rime-octagram-data
+```
+
+轉換為 FZGram（不需要網路，約 20 秒、峰值記憶體約 0.5 GB）：
+
+```sh
+python3 Tools/DictionaryCompiler/compile_dictionary.py build-grammar \
+  --source Vendor/rime-octagram-data/zh-hant-t-essay-bgw.gram \
+  --manifest Vendor/rime-octagram-data/SOURCE.json \
+  --output Generated/flickzhuyin.gram \
+  --report Generated/grammar-report.json
+```
+
+- `octagram.py` 解碼上游 darts-clone 雙陣列 trie 與 octagram 的 key 編碼，串流輸出 n-gram 與分數（`ln(x) × 10000`）。
+- 移除 octagram 不會查詢的句首（`$` 開頭）key，其餘以 UTF-8 bytes 排序，每 16 個 key 為一個前綴壓縮區塊；分數以最小值為基準右移 1 位存成 16 位元（誤差 ≤ 0.0001）。另存每個區塊首 key 前 8 bytes 的索引，讓二分搜尋集中在約 2 MB 的連續記憶體。
+- 格式細節見 `octagram.py` 開頭的說明；report 記錄 key 數、長度分布、分數範圍、輸出大小與 SHA-256，輸出大小有 64 MB 硬上限。
+- `Generated/flickzhuyin.gram`（約 37 MB）不納入版控，`Generated/grammar-report.json` 納入版控。缺少 `.gram` 時 production 語言模型測試會 skip，鍵盤則退回無語言模型排序。
+
+Swift 測試使用的迷你語言模型 fixture 由下列命令產生（小區塊以涵蓋跨區塊查詢），Python 測試會檢查它是否與 fixture source 同步：
+
+```sh
+python3 Tools/DictionaryCompiler/compile_dictionary.py build-grammar \
+  --text-source Tools/DictionaryCompiler/tests/fixtures/octagram_tests.txt \
+  --block-size 4 \
+  --output FlickZhuyinTests/Fixtures/flickzhuyin-tests.gram \
+  --report /tmp/flickzhuyin-grammar-fixture-report.json
+```
+
 ## 效能
 
-`ChineseInputPerformanceTests` 與 `DecoderPerformanceTests` 是防止演算法或 I/O 發生災難性退化的寬鬆保護，不代表產品延遲目標。Release 模擬器的 Decoder p95 上限為 100 ms，完整 parser → matcher → decoder Pipeline p95 上限為 250 ms；測試直接 assert 全部樣本的 p95，並輸出 min、平均與 p95 供比較。SQLite open、冷／熱查詢、pattern 查詢、parser 與 matcher 也分別設有 Debug／Release 寬鬆門檻，並涵蓋 2、4、8 個連續聲母的 matcher 測試與「每次 pattern query 最多回傳 result limit」的界線。
+`ChineseInputPerformanceTests` 與 `DecoderPerformanceTests` 是防止演算法或 I/O 發生災難性退化的寬鬆保護，不代表產品延遲目標。Release 模擬器的 Decoder p95 上限為 100 ms，完整 parser → matcher → decoder Pipeline p95 上限為 250 ms；測試直接 assert 全部樣本的 p95，並輸出 min、平均與 p95 供比較。語言模型 beam search 以 thread CPU time 量測（避免把等待排程的時間算進去），Release p95 上限 100 ms、Debug 500 ms；在 Release 模擬器上 30 個候選、10 token 的最壞輸入約 50 ms。SQLite open、冷／熱查詢、pattern 查詢、parser 與 matcher 也分別設有 Debug／Release 寬鬆門檻，並涵蓋 2、4、8 個連續聲母的 matcher 測試與「每次 pattern query 最多回傳 result limit」的界線。
 
 加入 Essay、讀音 provenance 與聲母索引後 production 資料庫約 165 MB（仍在 256 MB 上限內）。Extension 啟動仍只把音節 inventory 載入記憶體，詞條查詢維持依 `base_key` 與 `syllable_count`、pattern 查詢依 `initial_key` 與 `syllable_count` 使用索引，掃描量與單次回傳數都有硬上限，pattern 結果與掃描列另有具上限的 LRU cache。
 
 ## 資源檔案
 
-`Generated/flickzhuyin.sqlite3` 是鍵盤執行所需的可重現資源，但不納入版控：`.gitignore` 忽略它，歷史中也不存在任何版本。原因是它可由 pinned `Vendor/` 來源離線重建（見 [詞典編譯](#詞典編譯)），且檔案超過 GitHub 一般 Git blob 的 100 MB 限制。clone 或刪除 `Generated/` 後，建置與測試前必須先執行 `build`；`Generated/dictionary-report.json` 與 `Generated/LICENSE.md` 仍納入版控。
+`Generated/flickzhuyin.sqlite3` 與 `Generated/flickzhuyin.gram` 是鍵盤執行所需的可重現資源，但不納入版控：`.gitignore` 忽略兩者，歷史中也不存在任何版本。原因是它們可由 pinned `Vendor/` 來源離線重建（見 [詞典編譯](#詞典編譯) 與 [語言模型編譯](#語言模型編譯)），且 SQLite 詞典超過 GitHub 一般 Git blob 的 100 MB 限制；語言模型的上游 `.gram` 同樣不納入版控，只保留 manifest 與授權。clone 或刪除 `Generated/` 後，建置與測試前必須先執行 `build`，並以 `fetch-octagram` 與 `build-grammar` 產生語言模型；`Generated/dictionary-report.json`、`Generated/grammar-report.json` 與 `Generated/LICENSE.md` 仍納入版控。
 
 ## 第三方資料
 
 詞典來源以 pinned commit 鎖定，各 `SOURCE.json` 記錄來源、commit、SHA-256 與取得時間，Essay manifest 另記錄 LICENSE SHA-256 與格式版本；`build` 會驗證 source 與 license 的 SHA-256，`fetch-terra`／`fetch-essay` 只能在明確指定 commit 時使用，一般 build 與 App 執行期都不連網。
 
-`Generated/flickzhuyin.sqlite3` 同時包含 Terra Pinyin 與 Rime Essay 的衍生資料，sidecar 授權位於 `Generated/LICENSE.md`。完整 attribution、修改說明與授權連結見 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)；同一份 notices 與上游 LGPL 授權會打包進主 App 及 Keyboard Extension，App 內可從「第三方授權」開啟閱讀。發佈前仍需人工確認最終合規方式。
+`Generated/flickzhuyin.sqlite3` 同時包含 Terra Pinyin 與 Rime Essay 的衍生資料，`Generated/flickzhuyin.gram` 衍生自 rime-octagram-data，sidecar 授權位於 `Generated/LICENSE.md`。語言模型的 `fetch-octagram` 同樣只能以明確 commit 下載，`build-grammar` 會驗證 source 與 license 的 SHA-256。完整 attribution、修改說明與授權連結見 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)；同一份 notices 與上游 LGPL 授權會打包進主 App 及 Keyboard Extension，App 內可從「第三方授權」開啟閱讀。發佈前仍需人工確認最終合規方式。

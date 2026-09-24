@@ -1,0 +1,10 @@
+{
+  "repository": "https://github.com/lotem/rime-octagram-data",
+  "commit": "97bf55046aad163c3d1881abae5312040b1bbed9",
+  "gramPath": "zh-hant-t-essay-bgw.gram",
+  "sha256": "0488ebd6688f900a39200f2b794f2f99bcbf1e8fc27280ae4a2324b08b1559c1",
+  "licensePath": "LICENSE",
+  "licenseSha256": "da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768",
+  "formatVersion": 1,
+  "retrievedAt": "2026-09-23T04:43:07Z"
+}

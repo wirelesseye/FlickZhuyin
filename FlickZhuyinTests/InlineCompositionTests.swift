@@ -719,7 +719,7 @@ private actor ControlledPipeline: ChineseInputPipeline {
     private var continuations: [CheckedContinuation<[InputCandidate], Error>] = []
     private var requested: [[ZhuyinInputToken]] = []
 
-    func candidates(for tokens: [ZhuyinInputToken]) async throws -> [InputCandidate] {
+    func candidates(for tokens: [ZhuyinInputToken], precedingText: String) async throws -> [InputCandidate] {
         requested.append(tokens)
         return try await withCheckedThrowingContinuation { continuation in
             continuations.append(continuation)

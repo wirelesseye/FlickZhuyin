@@ -159,7 +159,7 @@ struct KeyboardEngine: Sendable {
             invalidatesCandidates: remainingTokens.isEmpty
         )
         if !remainingTokens.isEmpty {
-            update.candidateRequest = CandidateRequest(tokens: remainingTokens)
+            update.candidateRequest = candidateRequest(for: remainingTokens)
         }
         return update
     }
@@ -180,7 +180,16 @@ struct KeyboardEngine: Sendable {
         }
         return KeyboardUpdate(
             documentEffects: effects,
-            candidateRequest: CandidateRequest(tokens: tokens)
+            candidateRequest: candidateRequest(for: tokens)
+        )
+    }
+
+    private func candidateRequest(for tokens: [ZhuyinInputToken]) -> CandidateRequest {
+        let context = composition.precedingContext
+        return CandidateRequest(
+            tokens: tokens,
+            precedingText: context.text,
+            continuesDocument: context.reachesStart
         )
     }
 

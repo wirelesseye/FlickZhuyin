@@ -13,6 +13,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
+from octagram import FZGRAM_DEFAULT_BLOCK_SIZE, FZGram, GramFormatError, read_gram, write_fzgram
 from pinyin_to_zhuyin import PinyinError, convert_syllable, strip_tone
 
 TERRA_REPOSITORY = "https://github.com/rime/rime-terra-pinyin"
@@ -22,6 +23,14 @@ ESSAY_REPOSITORY = "https://github.com/rime/rime-essay"
 ESSAY_RAW_BASE_URL = "https://raw.githubusercontent.com/rime/rime-essay"
 ESSAY_PATH = "essay.txt"
 ESSAY_FORMAT_VERSION = 1
+OCTAGRAM_REPOSITORY = "https://github.com/lotem/rime-octagram-data"
+OCTAGRAM_RAW_BASE_URL = "https://raw.githubusercontent.com/lotem/rime-octagram-data"
+OCTAGRAM_GRAM_PATH = "zh-hant-t-essay-bgw.gram"
+OCTAGRAM_FORMAT_VERSION = 1
+GRAMMAR_COMPILER_VERSION = 1
+MAXIMUM_GRAMMAR_BYTES = 64 * 1024 * 1024
+MAXIMUM_GRAMMAR_KEY_CHARACTERS = 8
+SENTENCE_BOUNDARY = "$"
 COMPILER_VERSION = "5"
 SCHEMA_VERSION = 4
 REQUIRED_HEADER_KEYS = ("name", "version")
@@ -1084,6 +1093,139 @@ def build_database(
     )
 
 
+@dataclass(frozen=True)
+class GrammarBuildOutput:
+    key_count: int
+    dropped_keys: int
+    grammar_bytes: int
+
+
+def parse_grammar_text(path: Path) -> list[tuple[str, int]]:
+    """Parse `key<TAB>value` lines, where value is an octagram-scaled integer."""
+    entries = []
+    errors = []
+    for line_number, line in enumerate(Path(path).read_text(encoding="utf-8").splitlines(), 1):
+        if not line or line.startswith("#"):
+            continue
+        fields = line.split("\t")
+        if len(fields) != 2 or not fields[0] or INTEGER_PATTERN.fullmatch(fields[1]) is None:
+            errors.append(f"{path}:{line_number}: expected key<TAB>integer")
+            continue
+        entries.append((fields[0], int(fields[1])))
+    if errors:
+        raise CompileFailure("\n".join(errors))
+    return entries
+
+
+def build_grammar(
+    output_path: Path,
+    report_path: Path,
+    source_path: Path | None = None,
+    manifest_path: Path | None = None,
+    text_source_path: Path | None = None,
+    block_size: int = FZGRAM_DEFAULT_BLOCK_SIZE,
+) -> GrammarBuildOutput:
+    if (source_path is None) == (text_source_path is None):
+        raise CompileFailure("build-grammar: pass exactly one of --source or --text-source")
+    if source_path is not None:
+        if manifest_path is None:
+            raise CompileFailure("build-grammar: --source requires --manifest")
+        manifest = load_manifest(manifest_path)
+        verify_manifest_contract(manifest, manifest_path, source_path, "gramPath")
+        if manifest.get("formatVersion") != OCTAGRAM_FORMAT_VERSION:
+            raise CompileFailure(
+                f"{manifest_path}: unsupported octagram formatVersion "
+                f"{manifest.get('formatVersion')!r}, expected {OCTAGRAM_FORMAT_VERSION}"
+            )
+        source_sha256 = verify_source_hash(manifest, manifest_path, source_path)
+        verify_license_hash(manifest, manifest_path, source_path)
+        try:
+            entries = read_gram(source_path)
+        except GramFormatError as error:
+            raise CompileFailure(f"{source_path}: {error}") from error
+        source = {
+            "path": str(manifest["gramPath"]),
+            "sha256": source_sha256,
+            "repository": str(manifest.get("repository", "")),
+            "commit": str(manifest.get("commit", "")),
+            "formatVersion": str(manifest.get("formatVersion", "")),
+        }
+    else:
+        entries = parse_grammar_text(text_source_path)
+        source = {
+            "path": Path(text_source_path).name,
+            "sha256": sha256_bytes(Path(text_source_path).read_bytes()),
+        }
+
+    # Octagram only queries context+word keys and `word$`; `$word` keys are
+    # sentence-start statistics it never reads. Entries stream through so the
+    # multi-million-key source is never held as Python tuples.
+    stats = {"kept": 0, "dropped": 0, "minimum": None, "maximum": None}
+    length_histogram: dict[str, int] = {}
+    samples: list[tuple[str, int]] = []
+
+    def kept_entries():
+        for key, value in entries:
+            if key.startswith(SENTENCE_BOUNDARY) or len(key) > MAXIMUM_GRAMMAR_KEY_CHARACTERS:
+                stats["dropped"] += 1
+                continue
+            if stats["kept"] % 1000 == 0:
+                samples.append((key, value))
+            stats["kept"] += 1
+            length = str(len(key))
+            length_histogram[length] = length_histogram.get(length, 0) + 1
+            if stats["minimum"] is None or value < stats["minimum"]:
+                stats["minimum"] = value
+            if stats["maximum"] is None or value > stats["maximum"]:
+                stats["maximum"] = value
+            yield key, value
+
+    try:
+        grammar_bytes = write_fzgram(kept_entries(), GRAMMAR_COMPILER_VERSION, block_size)
+    except GramFormatError as error:
+        raise CompileFailure(f"build-grammar: {error}") from error
+    if len(grammar_bytes) > MAXIMUM_GRAMMAR_BYTES:
+        raise CompileFailure(
+            f"build-grammar: output is {len(grammar_bytes)} bytes, "
+            f"limit is {MAXIMUM_GRAMMAR_BYTES}"
+        )
+    reader = FZGram(grammar_bytes)
+    for key, value in samples:
+        decoded = reader.value(key)
+        if decoded is None or (value - decoded) >> reader.value_shift:
+            raise CompileFailure(f"build-grammar: round-trip failed for {key!r}")
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(grammar_bytes)
+
+    report = {
+        "keyCount": stats["kept"],
+        "droppedKeys": stats["dropped"],
+        "keyLengthHistogram": dict(sorted(length_histogram.items(), key=lambda item: int(item[0]))),
+        "valueRange": {"minimum": stats["minimum"], "maximum": stats["maximum"]},
+        "format": {
+            "formatVersion": 1,
+            "blockSize": reader.block_size,
+            "valueBase": reader.value_base,
+            "valueShift": reader.value_shift,
+        },
+        "output": {
+            "bytes": len(grammar_bytes),
+            "sha256": sha256_bytes(grammar_bytes),
+            "limitBytes": MAXIMUM_GRAMMAR_BYTES,
+        },
+        "source": source,
+        "compilerVersion": GRAMMAR_COMPILER_VERSION,
+    }
+    report_path = Path(report_path)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return GrammarBuildOutput(
+        key_count=stats["kept"], dropped_keys=stats["dropped"], grammar_bytes=len(grammar_bytes)
+    )
+
+
 def download(url: str) -> bytes:
     with urllib.request.urlopen(url, timeout=120) as response:
         return response.read()
@@ -1204,9 +1346,74 @@ def command_build(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_fetch_octagram(args: argparse.Namespace) -> int:
+    if not validate_commit(args.commit):
+        print("fetch-octagram: --commit must be a full 40-character lowercase hex commit", file=sys.stderr)
+        return 2
+    destination = Path(args.dest)
+    files = {
+        name: download(f"{OCTAGRAM_RAW_BASE_URL}/{args.commit}/{name}")
+        for name in (OCTAGRAM_GRAM_PATH, "LICENSE")
+    }
+    if not files[OCTAGRAM_GRAM_PATH].startswith(b"Rime::Grammar/"):
+        print("fetch-octagram: downloaded file is not a Rime::Grammar database", file=sys.stderr)
+        return 1
+    manifest = {
+        "repository": OCTAGRAM_REPOSITORY,
+        "commit": args.commit,
+        "gramPath": OCTAGRAM_GRAM_PATH,
+        "sha256": sha256_bytes(files[OCTAGRAM_GRAM_PATH]),
+        "licensePath": "LICENSE",
+        "licenseSha256": sha256_bytes(files["LICENSE"]),
+        "formatVersion": OCTAGRAM_FORMAT_VERSION,
+        "retrievedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    destination.mkdir(parents=True, exist_ok=True)
+    for name, data in files.items():
+        (destination / name).write_bytes(data)
+    manifest_path = destination / "SOURCE.json"
+    if manifest_path.exists():
+        existing = load_manifest(manifest_path)
+        if existing.get("commit") == args.commit and existing.get("sha256") != manifest["sha256"]:
+            print("fetch-octagram: download does not match the committed SOURCE.json", file=sys.stderr)
+            return 1
+        if existing.get("commit") == args.commit:
+            print(f"fetch-octagram: wrote {destination / OCTAGRAM_GRAM_PATH} ({manifest['sha256']})")
+            return 0
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"fetch-octagram: wrote {destination / OCTAGRAM_GRAM_PATH} ({manifest['sha256']})")
+    return 0
+
+
+def command_build_grammar(args: argparse.Namespace) -> int:
+    for label, path in (("source", args.source), ("manifest", args.manifest), ("text source", args.text_source)):
+        if path is not None and not Path(path).exists():
+            print(f"build-grammar: {label} not found: {path}", file=sys.stderr)
+            return 2
+    try:
+        result = build_grammar(
+            Path(args.output),
+            Path(args.report),
+            source_path=Path(args.source) if args.source else None,
+            manifest_path=Path(args.manifest) if args.manifest else None,
+            text_source_path=Path(args.text_source) if args.text_source else None,
+            block_size=args.block_size,
+        )
+    except CompileFailure as failure:
+        print("build-grammar: failed:", file=sys.stderr)
+        for line in str(failure).splitlines():
+            print(f"  {line}", file=sys.stderr)
+        return 1
+    print(
+        f"build-grammar: {result.key_count} keys "
+        f"({result.dropped_keys} dropped), {result.grammar_bytes} bytes"
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Compile the pinned Rime Terra Pinyin and Rime Essay sources into a SQLite dictionary"
+        description="Compile the pinned Rime sources into the SQLite dictionary and FZGram grammar"
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -1232,6 +1439,26 @@ def main(argv: list[str] | None = None) -> int:
     build.add_argument("--output", required=True)
     build.add_argument("--report", required=True)
     build.set_defaults(func=command_build)
+
+    fetch_octagram = subparsers.add_parser(
+        "fetch-octagram", help="download the pinned octagram grammar and license"
+    )
+    fetch_octagram.add_argument("--commit", required=True)
+    fetch_octagram.add_argument("--dest", default="Vendor/rime-octagram-data")
+    fetch_octagram.set_defaults(func=command_fetch_octagram)
+
+    build_grammar_parser = subparsers.add_parser(
+        "build-grammar", help="convert the octagram grammar to FZGram without network access"
+    )
+    build_grammar_parser.add_argument("--source")
+    build_grammar_parser.add_argument("--manifest")
+    build_grammar_parser.add_argument("--text-source", help="key<TAB>value lines, for test fixtures")
+    build_grammar_parser.add_argument(
+        "--block-size", type=int, default=FZGRAM_DEFAULT_BLOCK_SIZE, help=argparse.SUPPRESS
+    )
+    build_grammar_parser.add_argument("--output", required=True)
+    build_grammar_parser.add_argument("--report", required=True)
+    build_grammar_parser.set_defaults(func=command_build_grammar)
 
     args = parser.parse_args(argv)
     return args.func(args)

@@ -27,6 +27,10 @@ enum DocumentEffect: Equatable, Sendable {
 
 struct CandidateRequest: Equatable, Sendable {
     let tokens: [ZhuyinInputToken]
+    /// Selected text immediately before `tokens`, for grammar context.
+    var precedingText = ""
+    /// Whether the document text before the composition also precedes `tokens`.
+    var continuesDocument = true
 }
 
 struct KeyboardUpdate: Equatable, Sendable {

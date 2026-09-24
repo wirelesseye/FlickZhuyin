@@ -60,6 +60,13 @@
 		A10000000000000000000033 /* DecoderScorer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000015 /* DecoderScorer.swift */; };
 		A10000000000000000000034 /* Decoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000016 /* Decoder.swift */; };
 		A10000000000000000000035 /* DecoderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000017 /* DecoderTests.swift */; };
+		A10000000000000000000049 /* GramStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000024 /* GramStore.swift */; };
+		A1000000000000000000004A /* GramStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000024 /* GramStore.swift */; };
+		A1000000000000000000004B /* Grammar.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000025 /* Grammar.swift */; };
+		A1000000000000000000004C /* Grammar.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000025 /* Grammar.swift */; };
+		A1000000000000000000004D /* flickzhuyin.gram in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000026 /* flickzhuyin.gram */; };
+		A1000000000000000000004E /* flickzhuyin-tests.gram in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000027 /* flickzhuyin-tests.gram */; };
+		A1000000000000000000004F /* GrammarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000028 /* GrammarTests.swift */; };
 		A10000000000000000000036 /* DecoderPerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000018 /* DecoderPerformanceTests.swift */; };
 		A10000000000000000000037 /* ChineseInputPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000019 /* ChineseInputPipeline.swift */; };
 		A10000000000000000000038 /* InputCandidate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001A /* InputCandidate.swift */; };
@@ -143,6 +150,11 @@
 		B10000000000000000000015 /* DecoderScorer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DecoderScorer.swift; sourceTree = "<group>"; };
 		B10000000000000000000016 /* Decoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Decoder.swift; sourceTree = "<group>"; };
 		B10000000000000000000017 /* DecoderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DecoderTests.swift; sourceTree = "<group>"; };
+		B10000000000000000000024 /* GramStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GramStore.swift; sourceTree = "<group>"; };
+		B10000000000000000000025 /* Grammar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Grammar.swift; sourceTree = "<group>"; };
+		B10000000000000000000026 /* flickzhuyin.gram */ = {isa = PBXFileReference; lastKnownFileType = file; path = flickzhuyin.gram; sourceTree = "<group>"; };
+		B10000000000000000000027 /* flickzhuyin-tests.gram */ = {isa = PBXFileReference; lastKnownFileType = file; path = "flickzhuyin-tests.gram"; sourceTree = "<group>"; };
+		B10000000000000000000028 /* GrammarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrammarTests.swift; sourceTree = "<group>"; };
 		B10000000000000000000018 /* DecoderPerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DecoderPerformanceTests.swift; sourceTree = "<group>"; };
 		B10000000000000000000019 /* ChineseInputPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChineseInputPipeline.swift; sourceTree = "<group>"; };
 		B1000000000000000000001A /* InputCandidate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputCandidate.swift; sourceTree = "<group>"; };
@@ -246,6 +258,7 @@
 				B1000000000000000000000D /* ProductionDictionaryIntegrationTests.swift */,
 				B1000000000000000000000E /* ChineseInputPerformanceTests.swift */,
 				B10000000000000000000017 /* DecoderTests.swift */,
+				B10000000000000000000028 /* GrammarTests.swift */,
 				B10000000000000000000018 /* DecoderPerformanceTests.swift */,
 				B1000000000000000000001F /* InlineCompositionTests.swift */,
 				D10000000000000000000009 /* Fixtures */,
@@ -277,6 +290,8 @@
 				B10000000000000000000013 /* DecodedCandidate.swift */,
 				B10000000000000000000014 /* DecoderTransition.swift */,
 				B10000000000000000000015 /* DecoderScorer.swift */,
+				B10000000000000000000024 /* GramStore.swift */,
+				B10000000000000000000025 /* Grammar.swift */,
 				B10000000000000000000016 /* Decoder.swift */,
 				B10000000000000000000019 /* ChineseInputPipeline.swift */,
 				B1000000000000000000001A /* InputCandidate.swift */,
@@ -289,6 +304,7 @@
 			isa = PBXGroup;
 			children = (
 				B10000000000000000000009 /* flickzhuyin.sqlite3 */,
+				B10000000000000000000026 /* flickzhuyin.gram */,
 				B10000000000000000000012 /* LICENSE.md */,
 			);
 			path = Generated;
@@ -298,6 +314,7 @@
 			isa = PBXGroup;
 			children = (
 				B1000000000000000000000A /* flickzhuyin-tests.sqlite3 */,
+				B10000000000000000000027 /* flickzhuyin-tests.gram */,
 			);
 			path = Fixtures;
 			sourceTree = "<group>";
@@ -431,6 +448,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000022 /* flickzhuyin.sqlite3 in Resources */,
+				A1000000000000000000004D /* flickzhuyin.gram in Resources */,
 				A10000000000000000000029 /* THIRD_PARTY_NOTICES.md in Resources */,
 				A1000000000000000000002B /* Rime-LGPL-3.0.txt in Resources */,
 				A1000000000000000000002C /* LICENSE.md in Resources */,
@@ -442,6 +460,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000023 /* flickzhuyin-tests.sqlite3 in Resources */,
+				A1000000000000000000004E /* flickzhuyin-tests.gram in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -481,6 +500,8 @@
 				A1000000000000000000002D /* DecodedCandidate.swift in Sources */,
 				A1000000000000000000002E /* DecoderTransition.swift in Sources */,
 				A1000000000000000000002F /* DecoderScorer.swift in Sources */,
+				A10000000000000000000049 /* GramStore.swift in Sources */,
+				A1000000000000000000004B /* Grammar.swift in Sources */,
 				A10000000000000000000030 /* Decoder.swift in Sources */,
 				A10000000000000000000037 /* ChineseInputPipeline.swift in Sources */,
 				A10000000000000000000038 /* InputCandidate.swift in Sources */,
@@ -516,6 +537,9 @@
 				A10000000000000000000031 /* DecodedCandidate.swift in Sources */,
 				A10000000000000000000032 /* DecoderTransition.swift in Sources */,
 				A10000000000000000000033 /* DecoderScorer.swift in Sources */,
+				A1000000000000000000004A /* GramStore.swift in Sources */,
+				A1000000000000000000004C /* Grammar.swift in Sources */,
+				A1000000000000000000004F /* GrammarTests.swift in Sources */,
 				A10000000000000000000034 /* Decoder.swift in Sources */,
 				A10000000000000000000035 /* DecoderTests.swift in Sources */,
 				A10000000000000000000036 /* DecoderPerformanceTests.swift in Sources */,

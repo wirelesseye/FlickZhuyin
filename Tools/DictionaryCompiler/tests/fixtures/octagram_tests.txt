@@ -1,0 +1,13 @@
+# FZGram test fixture: key<TAB>octagram value, ln(x) * 10000.
+# Values for 天氣很, 天氣很好, 我們今, 我們今天, 的$, $我 and 〇點 match zh-hant-t-essay-bgw.
+天氣很	110235
+天氣很好	102272
+氣很	90000
+我們今	73065
+我們今天	122373
+的$	188028
+$我	192306
+你好$	150000
+中文	100000
+〇點	69697
+𠀀字	80000

@@ -14,6 +14,8 @@ final class KeyboardViewController: UIInputViewController {
     private var heightConstraint: NSLayoutConstraint?
     private var isCandidateListExpanded = false
     private var documentEffectDepth = 0
+    private var documentHasMarkedText = false
+    private var documentContextBeforeComposition = ""
     private var showsDirectionalSymbols = KeyboardSettings.showsDirectionalSymbols
 
     private var coordinator: ChineseInputCoordinator?
@@ -449,12 +451,25 @@ final class KeyboardViewController: UIInputViewController {
     private func apply(_ update: KeyboardUpdate) {
         documentEffectDepth += 1
         defer { documentEffectDepth -= 1 }
+        if !documentHasMarkedText {
+            // Read before marked text is inserted, so it holds only committed text.
+            documentContextBeforeComposition = GrammarContext.tail(
+                of: textDocumentProxy.documentContextBeforeInput
+            )
+        }
         effectApplier.apply(update.documentEffects)
+        documentHasMarkedText = engine.hasMarkedText
         if update.invalidatesCandidates {
             coordinator?.invalidate()
         }
         if let request = update.candidateRequest {
-            resolvedCoordinator().requestCandidates(for: request.tokens)
+            let precedingText = request.continuesDocument
+                ? documentContextBeforeComposition + request.precedingText
+                : request.precedingText
+            resolvedCoordinator().requestCandidates(
+                for: request.tokens,
+                precedingText: GrammarContext.tail(of: precedingText)
+            )
         }
     }
 

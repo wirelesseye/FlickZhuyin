@@ -1,7 +1,16 @@
 import Foundation
+import os
 
 protocol ChineseInputPipeline: Sendable {
-    func candidates(for tokens: [ZhuyinInputToken]) async throws -> [InputCandidate]
+    /// `precedingText` is committed text immediately left of the input, used
+    /// as grammar context. It is never stored.
+    func candidates(for tokens: [ZhuyinInputToken], precedingText: String) async throws -> [InputCandidate]
+}
+
+extension ChineseInputPipeline {
+    func candidates(for tokens: [ZhuyinInputToken]) async throws -> [InputCandidate] {
+        try await candidates(for: tokens, precedingText: "")
+    }
 }
 
 final class LexiconChineseInputPipeline: ChineseInputPipeline, @unchecked Sendable {
@@ -18,6 +27,7 @@ final class LexiconChineseInputPipeline: ChineseInputPipeline, @unchecked Sendab
         bundle: Bundle,
         resourceName: String = "flickzhuyin",
         resourceExtension: String = "sqlite3",
+        grammarResourceExtension: String? = "gram",
         decoder: Decoder = Decoder()
     ) throws {
         let store = try SQLiteLexiconStore(
@@ -25,6 +35,25 @@ final class LexiconChineseInputPipeline: ChineseInputPipeline, @unchecked Sendab
             resourceName: resourceName,
             resourceExtension: resourceExtension
         )
+        var decoder = decoder
+        if decoder.grammar == nil, let grammarResourceExtension {
+            do {
+                let grammarStore = try MappedGramStore(
+                    bundle: bundle,
+                    resourceName: resourceName,
+                    resourceExtension: grammarResourceExtension
+                )
+                decoder = Decoder(
+                    scorer: decoder.scorer,
+                    configuration: decoder.configuration,
+                    grammar: OctagramGrammar(store: grammarStore)
+                )
+            } catch {
+                // Ranking without a grammar is still usable; keep typing working.
+                Logger(subsystem: "com.wirelesseye.FlickZhuyin", category: "ChineseInput")
+                    .error("grammar unavailable: \(String(describing: error), privacy: .public)")
+            }
+        }
         try self.init(store: store, decoder: decoder)
     }
 
@@ -35,12 +64,14 @@ final class LexiconChineseInputPipeline: ChineseInputPipeline, @unchecked Sendab
         self.decoder = decoder
     }
 
-    func candidates(for tokens: [ZhuyinInputToken]) async throws -> [InputCandidate] {
+    func candidates(for tokens: [ZhuyinInputToken], precedingText: String) async throws -> [InputCandidate] {
         guard !tokens.isEmpty else { return [] }
         return try await withCheckedThrowingContinuation { continuation in
             queue.async {
                 do {
-                    continuation.resume(returning: try self.makeCandidates(for: tokens))
+                    continuation.resume(
+                        returning: try self.makeCandidates(for: tokens, precedingText: precedingText)
+                    )
                 } catch {
                     continuation.resume(throwing: error)
                 }
@@ -48,10 +79,17 @@ final class LexiconChineseInputPipeline: ChineseInputPipeline, @unchecked Sendab
         }
     }
 
-    private func makeCandidates(for tokens: [ZhuyinInputToken]) throws -> [InputCandidate] {
+    private func makeCandidates(
+        for tokens: [ZhuyinInputToken],
+        precedingText: String
+    ) throws -> [InputCandidate] {
         let syllableLattice = parser.lattice(for: tokens)
         let wordLattice = try matcher.buildLattice(from: syllableLattice)
-        let decoded = try decoder.decode(syllableLattice: syllableLattice, wordLattice: wordLattice)
+        let decoded = try decoder.decode(
+            syllableLattice: syllableLattice,
+            wordLattice: wordLattice,
+            precedingText: precedingText
+        )
         let candidates = Self.mergedByText(decoded.map(InputCandidate.init(decoded:)))
         var result: [InputCandidate]
         if candidates.contains(where: \.isRawFallback) {
@@ -65,6 +103,7 @@ final class LexiconChineseInputPipeline: ChineseInputPipeline, @unchecked Sendab
         }
         result.append(contentsOf: try exactSingleCharacterCandidates(
             lattice: syllableLattice,
+            precedingText: precedingText,
             excludingTexts: Set(result.map(\.text))
         ))
         return result
@@ -72,6 +111,7 @@ final class LexiconChineseInputPipeline: ChineseInputPipeline, @unchecked Sendab
 
     private func exactSingleCharacterCandidates(
         lattice: SyllableLattice,
+        precedingText: String,
         excludingTexts excluded: Set<String>
     ) throws -> [InputCandidate] {
         let tokenCount = lattice.tokenCount
@@ -95,7 +135,7 @@ final class LexiconChineseInputPipeline: ChineseInputPipeline, @unchecked Sendab
                         pronunciationWeight: match.pronunciationWeight,
                         syllableEdges: [edge]
                     )
-                )
+                ) + decoder.grammarCost(context: precedingText, word: match.text, isRear: true)
                 if let existing = bestByText[match.text], existing.score <= score {
                     continue
                 }
