@@ -27,6 +27,7 @@ Generated/                     編譯產物（SQLite 詞典、FZGram 語言模�
 
 - `SyllableParser` 從詞庫的合法音節清單建立音節格（syllable lattice），支援省略聲調、部分聲調與完整聲調；可同時作為完整音節與聲母前綴的符號（例如 `ㄓ`）會產生完整與聲母縮寫兩條 edge。
 - `SQLiteLexiconStore` 以唯讀模式開啟 bundle 內的 SQLite 詞典，只把 400 多個合法無調注音載入記憶體。完整注音查詢走 `base_key`，pattern（exact／initial 混合）查詢由 pattern 推導 `initial_key` 後走索引掃描，掃描量受 scan limit 限制，再逐列套用 exact 條件並在收集滿 result limit 後停止；三種查詢各有具上限的 LRU cache。
+- `UserLearningStore` 在 App Group 的獨立 SQLite 資料庫保存選字次數與 2–8 字新詞；`CombinedLexiconStore` 合併內建及使用者詞條，`UserFrequencyScorer` 對提交至少兩次的詞給予上限 2.5 的成本減免。Extension 無 Full Access 時只嘗試唯讀開啟，資料庫不可用時維持內建詞庫輸入；App 可清除資料，鍵盤查詢時以 SQLite `data_version` 更新計數快照。
 - `DictionaryMatcher` 沿音節格以統一的 pattern expansion 查詢詞庫：完整 edge 產生 `.exact`、單符號無調 edge 產生 `.initial`，同一位置可同時保留兩種解讀，全部 exact 時仍走快速 `exactMatches`；pattern 與查詢結果都會記憶化，混合查詢受 `patternMatchResultLimit`／`patternMatchScanLimit` 限制。
 - `Decoder` 將詞格與 raw 注音音節合併成永遠連通的解碼圖；沒有詞典匹配的片段會以原始注音保留。沒有語言模型時以精確 Top-K DAG 動態規劃輸出穩定排序的候選；有語言模型時改用 librime `Poet` 式的前向 beam search：每個詞以前兩個詞（第一個詞則以游標前文字）為上下文查詢語言模型，每個位置只保留 `beamWidth`（預設 5）個分數最佳且 text／讀音／上下文互異的部分句子，raw 注音音節不計語言模型分數並清空上下文。
 - `MappedGramStore` 以 `mmap` 唯讀映射 `flickzhuyin.gram`（FZGram 格式，見 [語言模型編譯](#語言模型編譯)），頁面為可回收的 file-backed clean pages，不計入 Extension 常駐記憶體；查詢先在區塊前綴索引上二分搜尋，再在 16 個 key 的前綴壓縮區塊內循序比對，同時回報是否存在更長的 key 以便提早中止。

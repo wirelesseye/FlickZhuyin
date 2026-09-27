@@ -20,6 +20,7 @@ final class KeyboardViewController: UIInputViewController {
     private var showsDirectionalSymbols = KeyboardSettings.showsDirectionalSymbols
 
     private var coordinator: ChineseInputCoordinator?
+    private var coordinatorHasFullAccess: Bool?
 
     private lazy var effectApplier = DocumentEffectApplier(
         client: TextDocumentProxyClient(proxy: textDocumentProxy)
@@ -36,6 +37,11 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        if let coordinatorHasFullAccess, coordinatorHasFullAccess != hasFullAccess {
+            coordinator?.invalidate()
+            coordinator = nil
+            self.coordinatorHasFullAccess = nil
+        }
         let shows = KeyboardSettings.showsDirectionalSymbols
         guard shows != showsDirectionalSymbols else { return }
         showsDirectionalSymbols = shows
@@ -399,6 +405,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func prepareForInputModeSwitch() {
         apply(engine.update(for: .nextKeyboard))
+        rememberCommittedSelection()
         refreshUI()
     }
 
@@ -406,6 +413,7 @@ final class KeyboardViewController: UIInputViewController {
         let oldMode = engine.mode
         let update = engine.update(for: key)
         apply(update)
+        rememberCommittedSelection()
         if key == .return, oldMode == .zhuyin,
            case let .insertText(text)? = update.documentEffects.first,
            update.invalidatesCandidates {
@@ -429,6 +437,7 @@ final class KeyboardViewController: UIInputViewController {
                 autoCommit: KeyboardSettings.autoCommitComposition
             )
             apply(update)
+            rememberCommittedSelection()
             if case let .insertText(text)? = update.documentEffects.first,
                update.invalidatesCandidates {
                 requestPostCommitSuggestions(for: text)
@@ -447,6 +456,16 @@ final class KeyboardViewController: UIInputViewController {
         let context = GrammarContext.tail(of: documentContextBeforeComposition + text)
         expectedSuggestionContext = context
         resolvedCoordinator().requestSuggestions(after: context)
+    }
+
+    private func rememberCommittedSelection() {
+        guard hasFullAccess, KeyboardSettings.remembersSelections,
+              !engine.lastCommittedChunks.isEmpty
+        else { return }
+        resolvedCoordinator().recordCommittedSelection(
+            chunks: engine.lastCommittedChunks,
+            fullySelected: engine.lastCommitWasFullySelected
+        )
     }
 
     private func toggleCandidateExpansion() {
@@ -548,18 +567,24 @@ final class KeyboardViewController: UIInputViewController {
         if let coordinator {
             return coordinator
         }
+        let fullAccess = hasFullAccess
         let coordinator = ChineseInputCoordinator { [bundle = Bundle.main] in
-            try LexiconChineseInputPipeline(
+            let userStore = KeyboardSettings.userLearningURL.flatMap {
+                try? UserLearningStore(url: $0, writable: fullAccess)
+            }
+            return try LexiconChineseInputPipeline(
                 bundle: bundle,
                 decoder: Decoder(
                     configuration: DecoderConfiguration(
                         maximumCandidates: Self.maximumCandidateCount
                     )
-                )
+                ),
+                userLearningStore: userStore
             )
         }
         coordinator.onChange = { [weak self] in self?.refreshCandidates() }
         self.coordinator = coordinator
+        coordinatorHasFullAccess = fullAccess
         return coordinator
     }
 

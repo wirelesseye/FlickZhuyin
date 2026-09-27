@@ -19,6 +19,7 @@ final class ChineseInputCoordinator {
     private var pipeline: (any ChineseInputPipeline)?
     private var pipelineUnavailable = false
     private var task: Task<Void, Never>?
+    private var learningTask: Task<Void, Never>?
     private var revision = 0
     private var pendingSnapshot: [ZhuyinInputToken] = []
     private var pendingSuggestionContext = ""
@@ -80,14 +81,43 @@ final class ChineseInputCoordinator {
             return
         }
 
+        let learningTask = self.learningTask
         task = Task { [weak self] in
             do {
+                if let learningTask {
+                    await learningTask.value
+                    guard !Task.isCancelled else { return }
+                }
                 let result = try await pipeline.candidates(for: tokens, precedingText: precedingText)
                 guard !Task.isCancelled else { return }
                 self?.apply(result, requestRevision: requestRevision, tokens: tokens)
             } catch {
                 guard !Task.isCancelled else { return }
                 self?.applyFailure(.queryFailed, requestRevision: requestRevision, tokens: tokens)
+            }
+        }
+    }
+
+    func recordCommittedSelection(chunks: [SelectedChunk], fullySelected: Bool) {
+        guard !chunks.isEmpty, !pipelineUnavailable else { return }
+        let pipeline: any ChineseInputPipeline
+        do {
+            pipeline = try resolvedPipeline()
+        } catch {
+            logFailure(.pipelineUnavailable)
+            return
+        }
+        let previous = learningTask
+        learningTask = Task {
+            await previous?.value
+            do {
+                try await pipeline.recordCommittedSelection(
+                    chunks: chunks,
+                    fullySelected: fullySelected
+                )
+            } catch {
+                Logger(subsystem: "com.wirelesseye.FlickZhuyin", category: "ChineseInput")
+                    .error("learning write failed: \(String(describing: error), privacy: .public)")
             }
         }
     }

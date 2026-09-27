@@ -10,6 +10,12 @@ struct ContentView: View {
         KeyboardSettings.autoCommitCompositionKey,
         store: KeyboardSettings.sharedDefaults
     ) private var autoCommitComposition = KeyboardSettings.autoCommitComposition
+    @AppStorage(
+        KeyboardSettings.remembersSelectionsKey,
+        store: KeyboardSettings.sharedDefaults
+    ) private var remembersSelections = KeyboardSettings.remembersSelections
+    @State private var showsClearConfirmation = false
+    @State private var learningMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -39,12 +45,42 @@ struct ContentView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
 
+                Toggle("記憶選字", isOn: $remembersSelections)
+                Text("提交後記住新詞與選字次數。鍵盤需要開啟「允許完整取用」才能寫入；資料只保存在此裝置。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                Button("清除學習資料", role: .destructive) {
+                    showsClearConfirmation = true
+                }
+                if let learningMessage {
+                    Text(learningMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
                 NavigationLink("第三方授權") {
                     ThirdPartyLicensesView()
                 }
             }
             .padding()
             .navigationTitle("FlickZhuyin")
+            .confirmationDialog("清除所有新詞與選字次數？", isPresented: $showsClearConfirmation) {
+                Button("清除學習資料", role: .destructive) {
+                    Task {
+                        do {
+                            guard let url = KeyboardSettings.userLearningURL else {
+                                throw UserLearningError.database("App Group 容器不可用")
+                            }
+                            let store = try UserLearningStore(url: url, writable: true)
+                            try store.clear()
+                            learningMessage = "已清除學習資料。"
+                        } catch {
+                            learningMessage = "清除失敗：\(error.localizedDescription)"
+                        }
+                    }
+                }
+            }
         }
     }
 }

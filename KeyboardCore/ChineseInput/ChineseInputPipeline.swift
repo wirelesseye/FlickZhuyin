@@ -6,6 +6,7 @@ protocol ChineseInputPipeline: Sendable {
     /// as grammar context. It is never stored.
     func candidates(for tokens: [ZhuyinInputToken], precedingText: String) async throws -> [InputCandidate]
     func suggestions(after precedingText: String) async throws -> [String]
+    func recordCommittedSelection(chunks: [SelectedChunk], fullySelected: Bool) async throws
 }
 
 extension ChineseInputPipeline {
@@ -14,6 +15,8 @@ extension ChineseInputPipeline {
     }
 
     func suggestions(after precedingText: String) async throws -> [String] { [] }
+
+    func recordCommittedSelection(chunks: [SelectedChunk], fullySelected: Bool) async throws {}
 }
 
 final class LexiconChineseInputPipeline: ChineseInputPipeline, @unchecked Sendable {
@@ -21,6 +24,8 @@ final class LexiconChineseInputPipeline: ChineseInputPipeline, @unchecked Sendab
     private let matcher: DictionaryMatcher
     private let decoder: Decoder
     private let store: any LexiconStore
+    private let bundledStore: any LexiconStore
+    private let userLearningStore: UserLearningStore?
     private let queue = DispatchQueue(
         label: "com.wirelesseye.FlickZhuyin.ChineseInputPipeline",
         qos: .userInitiated
@@ -31,7 +36,8 @@ final class LexiconChineseInputPipeline: ChineseInputPipeline, @unchecked Sendab
         resourceName: String = "flickzhuyin",
         resourceExtension: String = "sqlite3",
         grammarResourceExtension: String? = "gram",
-        decoder: Decoder = Decoder()
+        decoder: Decoder = Decoder(),
+        userLearningStore: UserLearningStore? = nil
     ) throws {
         let store = try SQLiteLexiconStore(
             bundle: bundle,
@@ -57,14 +63,64 @@ final class LexiconChineseInputPipeline: ChineseInputPipeline, @unchecked Sendab
                     .error("grammar unavailable: \(String(describing: error), privacy: .public)")
             }
         }
-        try self.init(store: store, decoder: decoder)
+        try self.init(store: store, decoder: decoder, userLearningStore: userLearningStore)
     }
 
-    init(store: any LexiconStore, decoder: Decoder = Decoder()) throws {
-        self.store = store
-        parser = try SyllableParser(store: store)
-        matcher = DictionaryMatcher(store: store)
+    init(
+        store: any LexiconStore,
+        decoder: Decoder = Decoder(),
+        userLearningStore: UserLearningStore? = nil
+    ) throws {
+        bundledStore = store
+        self.userLearningStore = userLearningStore
+        let combined = CombinedLexiconStore(bundled: store, learned: userLearningStore)
+        self.store = combined
+        parser = try SyllableParser(store: combined)
+        matcher = DictionaryMatcher(store: combined)
         self.decoder = decoder
+    }
+
+    func recordCommittedSelection(chunks: [SelectedChunk], fullySelected: Bool) async throws {
+        guard let userLearningStore, !chunks.isEmpty else { return }
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            queue.async {
+                do {
+                    let entries = try self.learningEntries(chunks: chunks, fullySelected: fullySelected)
+                    try userLearningStore.record(entries)
+                    continuation.resume()
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    private func learningEntries(
+        chunks: [SelectedChunk],
+        fullySelected: Bool
+    ) throws -> [(key: UserWordKey, isLearned: Bool)] {
+        var entries: [(key: UserWordKey, isLearned: Bool)] = chunks.compactMap { chunk in
+            UserWordKey(text: chunk.text, pronunciation: chunk.pronunciation).map { ($0, false) }
+        }
+        guard fullySelected else { return entries }
+        let text = chunks.map(\.text).joined()
+        let pronunciation = chunks.flatMap(\.pronunciation)
+        guard let key = UserWordKey(text: text, pronunciation: pronunciation),
+              (2...8).contains(key.syllableCount)
+        else { return entries }
+        guard let bundled = try? bundledStore.exactMatches(for: pronunciation) else {
+            return entries
+        }
+        let exists = bundled.contains { match in
+            match.text == text && match.pronunciation.map { String($0.tone.digit) }.joined() == key.toneKey
+        }
+        guard !exists else { return entries }
+        if entries.count == 1 && entries[0].key == key {
+            entries[0].isLearned = true
+        } else {
+            entries.append((key, true))
+        }
+        return entries
     }
 
     func candidates(for tokens: [ZhuyinInputToken], precedingText: String) async throws -> [InputCandidate] {
@@ -95,6 +151,12 @@ final class LexiconChineseInputPipeline: ChineseInputPipeline, @unchecked Sendab
         for tokens: [ZhuyinInputToken],
         precedingText: String
     ) throws -> [InputCandidate] {
+        let counts = (try? userLearningStore?.countSnapshot()) ?? [:]
+        let decoder = Decoder(
+            scorer: UserFrequencyScorer(base: self.decoder.scorer, counts: counts),
+            configuration: self.decoder.configuration,
+            grammar: self.decoder.grammar
+        )
         let syllableLattice = parser.lattice(for: tokens)
         let wordLattice = try matcher.buildLattice(from: syllableLattice)
         let decoded = try decoder.decode(
@@ -113,18 +175,36 @@ final class LexiconChineseInputPipeline: ChineseInputPipeline, @unchecked Sendab
                 result.append(fallback)
             }
         }
-        result.append(contentsOf: try exactSingleCharacterCandidates(
+        let exactCharacters = try exactSingleCharacterCandidates(
             lattice: syllableLattice,
             precedingText: precedingText,
-            excludingTexts: Set(result.map(\.text))
-        ))
+            excludingTexts: Set(result.map(\.text)),
+            decoder: decoder
+        )
+        let promoted = exactCharacters.filter { candidate in
+            guard let key = UserWordKey(text: candidate.text, pronunciation: candidate.pronunciation) else {
+                return false
+            }
+            return (counts[key] ?? 0) >= 2
+        }
+        if promoted.isEmpty {
+            result.append(contentsOf: exactCharacters)
+            return result
+        }
+        let ranked = (result.filter { !$0.isRawFallback } + promoted).sorted { lhs, rhs in
+            lhs.score == rhs.score ? lhs.text < rhs.text : lhs.score < rhs.score
+        }
+        let promotedTexts = Set(promoted.map(\.text))
+        result = ranked + result.filter(\.isRawFallback)
+        result.append(contentsOf: exactCharacters.filter { !promotedTexts.contains($0.text) })
         return result
     }
 
     private func exactSingleCharacterCandidates(
         lattice: SyllableLattice,
         precedingText: String,
-        excludingTexts excluded: Set<String>
+        excludingTexts excluded: Set<String>,
+        decoder: Decoder
     ) throws -> [InputCandidate] {
         let tokenCount = lattice.tokenCount
         guard tokenCount > 0 else { return [] }

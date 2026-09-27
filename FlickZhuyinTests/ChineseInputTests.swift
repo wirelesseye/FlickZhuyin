@@ -45,6 +45,150 @@ class ChineseInputTestCase: XCTestCase {
     }
 }
 
+final class UserLearningTests: ChineseInputTestCase {
+    private let nihao = [
+        SyllableConstraint(base: "ㄋㄧ", tone: .third),
+        SyllableConstraint(base: "ㄏㄠ", tone: .third),
+    ]
+    private let zhong = [SyllableConstraint(base: "ㄓㄨㄥ", tone: .first)]
+
+    private func chunk(_ text: String, _ pronunciation: [SyllableConstraint]) -> SelectedChunk {
+        SelectedChunk(text: text, sourceTokens: [.symbol("ㄋ")], pronunciation: pronunciation)
+    }
+
+    func testStorePersistsCountsAndClearUpdatesOtherConnection() throws {
+        let url = temporaryURL("learning.sqlite3")
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let writer = try UserLearningStore(url: url, writable: true)
+        let key = try XCTUnwrap(UserWordKey(text: "你好中", pronunciation: nihao + zhong))
+        try writer.record([(key, true), (key, false)])
+        let reader = try UserLearningStore(url: url, writable: false)
+        XCTAssertEqual(try reader.countSnapshot()[key], 2)
+        XCTAssertEqual(try reader.exactRecords(baseKey: key.baseKey, syllableCount: 3).count, 1)
+        try reader.record([(key, true)])
+        XCTAssertEqual(try reader.countSnapshot()[key], 2, "read-only access must not learn")
+        try writer.clear()
+        XCTAssertTrue(try reader.countSnapshot().isEmpty)
+    }
+
+    func testCommittedCompositionCreatesNewWordWithFullAndInitialLookup() async throws {
+        let url = temporaryURL("learning.sqlite3")
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let learning = try UserLearningStore(url: url, writable: true)
+        let bundled = try makeFixtureStore()
+        let pipeline = try LexiconChineseInputPipeline(store: bundled, userLearningStore: learning)
+        let chunks = [chunk("你好", nihao), chunk("中", zhong)]
+        try await pipeline.recordCommittedSelection(chunks: chunks, fullySelected: true)
+        let combined = CombinedLexiconStore(bundled: bundled, learned: learning)
+        XCTAssertTrue(try combined.exactMatches(for: nihao + zhong).contains { $0.text == "你好中" })
+        let patterns = ["ㄋ", "ㄏ", "ㄓ"].map { SyllableMatchPattern.initial(Character($0)) }
+        XCTAssertTrue(try combined.patternMatches(for: patterns, resultLimit: 64, scanLimit: 128)
+            .contains { $0.text == "你好中" })
+        let phraseKey = try XCTUnwrap(UserWordKey(text: "你好中", pronunciation: nihao + zhong))
+        XCTAssertEqual(try learning.countSnapshot()[phraseKey], 1)
+        XCTAssertEqual(try learning.countSnapshot()[UserWordKey(text: "你好", pronunciation: nihao)!], 1)
+        let candidates = try await pipeline.candidates(for: tokens("ㄋㄧㄏㄠㄓㄨㄥ"))
+        XCTAssertTrue(candidates.contains { $0.text == "你好中" })
+    }
+
+    func testPendingRawTextDoesNotCreateCombinedWord() async throws {
+        let url = temporaryURL("learning.sqlite3")
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let learning = try UserLearningStore(url: url, writable: true)
+        let pipeline = try LexiconChineseInputPipeline(store: try makeFixtureStore(), userLearningStore: learning)
+        try await pipeline.recordCommittedSelection(
+            chunks: [chunk("你好", nihao), chunk("中", zhong)], fullySelected: false
+        )
+        let key = try XCTUnwrap(UserWordKey(text: "你好中", pronunciation: nihao + zhong))
+        XCTAssertNil(try learning.countSnapshot()[key])
+    }
+
+    func testDifferentReadingIsLearnedAndKnownReadingIsCountedOnly() async throws {
+        let url = temporaryURL("learning.sqlite3")
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let learning = try UserLearningStore(url: url, writable: true)
+        let pipeline = try LexiconChineseInputPipeline(store: try makeFixtureStore(), userLearningStore: learning)
+        let alternate = [
+            SyllableConstraint(base: "ㄓㄨㄥ", tone: .first),
+            SyllableConstraint(base: "ㄨㄣ", tone: .first),
+        ]
+        try await pipeline.recordCommittedSelection(chunks: [chunk("中文", alternate)], fullySelected: true)
+        let key = try XCTUnwrap(UserWordKey(text: "中文", pronunciation: alternate))
+        XCTAssertTrue(try XCTUnwrap(learning.exactRecords(baseKey: key.baseKey, syllableCount: 2).first).isLearned)
+        let known = [alternate[0], SyllableConstraint(base: "ㄨㄣ", tone: .second)]
+        try await pipeline.recordCommittedSelection(chunks: [chunk("中文", known)], fullySelected: true)
+        let knownKey = try XCTUnwrap(UserWordKey(text: "中文", pronunciation: known))
+        XCTAssertEqual(try learning.countSnapshot()[knownKey], 1)
+        XCTAssertEqual(try learning.exactRecords(baseKey: knownKey.baseKey, syllableCount: 2).count, 1)
+    }
+
+    func testFrequencyBoostIsBoundedAndStartsOnSecondCommit() throws {
+        let edge = SyllableEdge(
+            tokenRange: 0..<1,
+            constraint: zhong[0],
+            completeness: .complete,
+            parserCost: 0
+        )
+        let word = WordEdge(
+            tokenRange: 0..<1,
+            text: "中",
+            pronunciation: [CanonicalSyllable(base: "ㄓㄨㄥ", tone: .first)],
+            sourceWeight: 0.01,
+            syllableEdges: [edge]
+        )
+        let key = try XCTUnwrap(UserWordKey(text: "中", pronunciation: zhong))
+        let base = BaselineDecoderScorer()
+        let cost = try base.cost(for: word)
+        XCTAssertEqual(try UserFrequencyScorer(base: base, counts: [key: 1]).cost(for: word), cost)
+        XCTAssertEqual(try UserFrequencyScorer(base: base, counts: [key: 2]).cost(for: word), cost - 0.75)
+        XCTAssertEqual(try UserFrequencyScorer(base: base, counts: [key: 100]).cost(for: word), cost - 2.5)
+    }
+
+    func testRepeatedSelectionMovesCandidateAheadInPipeline() async throws {
+        let url = temporaryURL("learning.sqlite3")
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let learning = try UserLearningStore(url: url, writable: true)
+        let reading = zhong
+        let key = try XCTUnwrap(UserWordKey(text: "終", pronunciation: reading))
+        let pipeline = try LexiconChineseInputPipeline(
+            store: RankingFixtureStore(),
+            userLearningStore: learning
+        )
+        let input: [ZhuyinInputToken] = [.symbol("ㄓ"), .symbol("ㄨ"), .symbol("ㄥ"), .tone(.first)]
+        let before = try await pipeline.candidates(for: input)
+        XCTAssertEqual(before.first?.text, "中")
+        for _ in 0..<8 { try learning.record([(key, false)]) }
+        let after = try await pipeline.candidates(for: input)
+        XCTAssertEqual(after.first?.text, "終")
+    }
+}
+
+private struct RankingFixtureStore: LexiconStore {
+    func syllableInventory() throws -> [String] { ["ㄓㄨㄥ"] }
+
+    func exactMatches(for syllables: [SyllableConstraint]) throws -> [LexiconMatch] {
+        guard syllables.count == 1, syllables[0].base == "ㄓㄨㄥ",
+              syllables[0].tone == nil || syllables[0].tone == .first
+        else { return [] }
+        let reading = [CanonicalSyllable(base: "ㄓㄨㄥ", tone: .first)]
+        return [
+            LexiconMatch(text: "中", pronunciation: reading, sourceWeight: 0.5),
+            LexiconMatch(text: "終", pronunciation: reading, sourceWeight: 0.2),
+        ]
+    }
+
+    func patternMatches(
+        for patterns: [SyllableMatchPattern],
+        resultLimit: Int,
+        scanLimit: Int
+    ) throws -> [LexiconMatch] { [] }
+}
+
 final class MandarinToneTests: XCTestCase {
     func testDigitsMapToTones() {
         XCTAssertEqual(MandarinTone(digit: "1"), .first)

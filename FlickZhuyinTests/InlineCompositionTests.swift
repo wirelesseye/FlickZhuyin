@@ -86,6 +86,32 @@ final class KeyboardCompositionTests: XCTestCase {
         _ = engine.selectCandidate(makeCandidate("注"))
     }
 
+    func testLearningMetadataAppearsOnlyAfterCommit() {
+        var engine = KeyboardEngine()
+        selectZhuyin(&engine)
+        XCTAssertTrue(engine.lastCommittedChunks.isEmpty)
+        _ = engine.update(for: .return)
+        XCTAssertEqual(engine.lastCommittedChunks.map(\.text), ["注"])
+        XCTAssertTrue(engine.lastCommitWasFullySelected)
+
+        selectZhuyin(&engine)
+        _ = engine.update(for: .delete)
+        _ = engine.update(for: .return)
+        XCTAssertTrue(engine.lastCommittedChunks.isEmpty)
+    }
+
+    func testModeSwitchAndAutoCommitCarrySelectedChunks() {
+        var engine = KeyboardEngine()
+        _ = engine.update(for: .zhuyin("ㄓ"))
+        _ = engine.selectCandidate(makeCandidate("注"), autoCommit: true)
+        XCTAssertEqual(engine.lastCommittedChunks.map(\.text), ["注"])
+
+        selectZhuyin(&engine)
+        _ = engine.update(for: .modeSwitch)
+        XCTAssertEqual(engine.lastCommittedChunks.map(\.text), ["注"])
+        XCTAssertTrue(engine.lastCommitWasFullySelected)
+    }
+
     func testSelectingCandidateKeepsCompositionMarked() {
         var engine = KeyboardEngine()
         _ = engine.update(for: .zhuyin("ㄓ"))

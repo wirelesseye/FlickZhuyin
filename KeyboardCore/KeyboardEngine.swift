@@ -4,6 +4,8 @@ struct KeyboardEngine: Sendable {
     private(set) var mode: KeyboardMode
     private(set) var letterCase: LetterCaseState = .lowercase
     private(set) var composition = ZhuyinComposition()
+    private(set) var lastCommittedChunks: [SelectedChunk] = []
+    private(set) var lastCommitWasFullySelected = false
     private var lastShiftTap: TimeInterval?
 
     init(mode: KeyboardMode = .zhuyin) {
@@ -34,6 +36,8 @@ struct KeyboardEngine: Sendable {
         for key: KeyboardKey,
         at timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime
     ) -> KeyboardUpdate {
+        lastCommittedChunks = []
+        lastCommitWasFullySelected = false
         switch key {
         case let .letter(character):
             guard mode == .abc else { return .none }
@@ -85,6 +89,7 @@ struct KeyboardEngine: Sendable {
                 return KeyboardUpdate(documentEffects: [.insertText("\n")])
             }
             let committedText = composition.markedText
+            captureCommittedChunks()
             composition = ZhuyinComposition()
             return KeyboardUpdate(
                 documentEffects: [.insertText(committedText)],
@@ -94,6 +99,7 @@ struct KeyboardEngine: Sendable {
             guard mode == .zhuyin, !composition.isEmpty else {
                 return KeyboardUpdate(documentEffects: [.showInputModeList])
             }
+            captureCommittedChunks()
             composition = ZhuyinComposition()
             return KeyboardUpdate(
                 documentEffects: [.unmarkText, .showInputModeList],
@@ -103,6 +109,7 @@ struct KeyboardEngine: Sendable {
             switch mode {
             case .zhuyin:
                 let hadComposition = !composition.isEmpty
+                if hadComposition { captureCommittedChunks() }
                 composition = ZhuyinComposition()
                 mode = .abc
                 return KeyboardUpdate(
@@ -120,6 +127,7 @@ struct KeyboardEngine: Sendable {
             switch mode {
             case .zhuyin:
                 let hadComposition = !composition.isEmpty
+                if hadComposition { captureCommittedChunks() }
                 composition = ZhuyinComposition()
                 mode = .number
                 return KeyboardUpdate(
@@ -136,6 +144,8 @@ struct KeyboardEngine: Sendable {
     }
 
     mutating func selectCandidate(_ candidate: InputCandidate, autoCommit: Bool = false) -> KeyboardUpdate {
+        lastCommittedChunks = []
+        lastCommitWasFullySelected = false
         let tokens = composition.activeTokens
         guard mode == .zhuyin, !tokens.isEmpty else { return .none }
         composition.replaceActiveTokens(
@@ -147,6 +157,7 @@ struct KeyboardEngine: Sendable {
         )
         if autoCommit, !composition.hasPendingTokens {
             let committedText = composition.markedText
+            captureCommittedChunks()
             composition = ZhuyinComposition()
             return KeyboardUpdate(
                 documentEffects: [.insertText(committedText)],
@@ -170,9 +181,16 @@ struct KeyboardEngine: Sendable {
     }
 
     mutating func resetComposition() -> KeyboardUpdate {
+        lastCommittedChunks = []
+        lastCommitWasFullySelected = false
         guard !composition.isEmpty else { return .none }
         composition = ZhuyinComposition()
         return KeyboardUpdate(invalidatesCandidates: true)
+    }
+
+    private mutating func captureCommittedChunks() {
+        lastCommittedChunks = composition.selectedChunks
+        lastCommitWasFullySelected = !composition.hasPendingTokens
     }
 
     private func activeRunUpdate() -> KeyboardUpdate {

@@ -67,6 +67,11 @@
 		A1000000000000000000004D /* flickzhuyin.gram in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000026 /* flickzhuyin.gram */; };
 		A1000000000000000000004E /* flickzhuyin-tests.gram in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000027 /* flickzhuyin-tests.gram */; };
 		A1000000000000000000004F /* GrammarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000028 /* GrammarTests.swift */; };
+		A10000000000000000000050 /* UserLearningStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000029 /* UserLearningStore.swift */; };
+		A10000000000000000000051 /* UserLearningStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000029 /* UserLearningStore.swift */; };
+		A10000000000000000000052 /* UserLearningStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000029 /* UserLearningStore.swift */; };
+		A10000000000000000000053 /* UserLexiconStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000002A /* UserLexiconStore.swift */; };
+		A10000000000000000000054 /* UserLexiconStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000002A /* UserLexiconStore.swift */; };
 		A10000000000000000000036 /* DecoderPerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000018 /* DecoderPerformanceTests.swift */; };
 		A10000000000000000000037 /* ChineseInputPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000019 /* ChineseInputPipeline.swift */; };
 		A10000000000000000000038 /* InputCandidate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001A /* InputCandidate.swift */; };
@@ -155,6 +160,8 @@
 		B10000000000000000000026 /* flickzhuyin.gram */ = {isa = PBXFileReference; lastKnownFileType = file; path = flickzhuyin.gram; sourceTree = "<group>"; };
 		B10000000000000000000027 /* flickzhuyin-tests.gram */ = {isa = PBXFileReference; lastKnownFileType = file; path = "flickzhuyin-tests.gram"; sourceTree = "<group>"; };
 		B10000000000000000000028 /* GrammarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrammarTests.swift; sourceTree = "<group>"; };
+		B10000000000000000000029 /* UserLearningStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserLearningStore.swift; sourceTree = "<group>"; };
+		B1000000000000000000002A /* UserLexiconStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserLexiconStore.swift; sourceTree = "<group>"; };
 		B10000000000000000000018 /* DecoderPerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DecoderPerformanceTests.swift; sourceTree = "<group>"; };
 		B10000000000000000000019 /* ChineseInputPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChineseInputPipeline.swift; sourceTree = "<group>"; };
 		B1000000000000000000001A /* InputCandidate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputCandidate.swift; sourceTree = "<group>"; };
@@ -245,6 +252,7 @@
 				B00000000000000000000007 /* KeyboardEngine.swift */,
 				B0000000000000000000000E /* ZhuyinLayout.swift */,
 				B10000000000000000000021 /* KeyboardSettings.swift */,
+				B10000000000000000000029 /* UserLearningStore.swift */,
 				D10000000000000000000007 /* ChineseInput */,
 			);
 			path = KeyboardCore;
@@ -285,6 +293,7 @@
 				B10000000000000000000004 /* SyllableLattice.swift */,
 				B10000000000000000000005 /* LexiconStore.swift */,
 				B10000000000000000000006 /* SQLiteLexiconStore.swift */,
+				B1000000000000000000002A /* UserLexiconStore.swift */,
 				B10000000000000000000007 /* DictionaryMatcher.swift */,
 				B10000000000000000000008 /* WordLattice.swift */,
 				B10000000000000000000013 /* DecodedCandidate.swift */,
@@ -475,6 +484,7 @@
 				A00000000000000000000002 /* ContentView.swift in Sources */,
 				A10000000000000000000027 /* ThirdPartyLicensesView.swift in Sources */,
 				A10000000000000000000044 /* KeyboardSettings.swift in Sources */,
+				A10000000000000000000050 /* UserLearningStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -495,6 +505,8 @@
 				A10000000000000000000004 /* SyllableLattice.swift in Sources */,
 				A10000000000000000000005 /* LexiconStore.swift in Sources */,
 				A10000000000000000000006 /* SQLiteLexiconStore.swift in Sources */,
+				A10000000000000000000051 /* UserLearningStore.swift in Sources */,
+				A10000000000000000000053 /* UserLexiconStore.swift in Sources */,
 				A10000000000000000000007 /* DictionaryMatcher.swift in Sources */,
 				A10000000000000000000008 /* WordLattice.swift in Sources */,
 				A1000000000000000000002D /* DecodedCandidate.swift in Sources */,
@@ -529,6 +541,8 @@
 				A10000000000000000000014 /* SyllableLattice.swift in Sources */,
 				A10000000000000000000015 /* LexiconStore.swift in Sources */,
 				A10000000000000000000016 /* SQLiteLexiconStore.swift in Sources */,
+				A10000000000000000000052 /* UserLearningStore.swift in Sources */,
+				A10000000000000000000054 /* UserLexiconStore.swift in Sources */,
 				A10000000000000000000017 /* DictionaryMatcher.swift in Sources */,
 				A10000000000000000000018 /* WordLattice.swift in Sources */,
 				A10000000000000000000024 /* ChineseInputTests.swift in Sources */,
