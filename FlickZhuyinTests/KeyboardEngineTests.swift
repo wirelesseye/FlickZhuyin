@@ -1,6 +1,19 @@
 import XCTest
 
 final class KeyboardEngineTests: XCTestCase {
+    func testSuggestionInsertsOnlyAfterCompositionCompletes() {
+        var engine = KeyboardEngine()
+        XCTAssertEqual(
+            engine.selectSuggestion("很好"),
+            KeyboardUpdate(documentEffects: [.insertText("很好")], invalidatesCandidates: true)
+        )
+        _ = engine.update(for: .zhuyin("ㄓ"))
+        XCTAssertEqual(engine.selectSuggestion("很好"), .none)
+        _ = engine.update(for: .return)
+        _ = engine.update(for: .modeSwitch)
+        XCTAssertEqual(engine.selectSuggestion("很好"), .none)
+    }
+
     func testQWERTYLayout() {
         XCTAssertEqual(KeyboardLayout.letterRows.map(letters), ["qwertyuiop", "asdfghjkl", "zxcvbnm"])
         XCTAssertEqual(KeyboardLayout.thirdRow, [.shift] + KeyboardLayout.letterRows[2] + [.delete])

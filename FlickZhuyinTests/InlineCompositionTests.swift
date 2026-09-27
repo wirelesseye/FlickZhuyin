@@ -718,6 +718,8 @@ private final class ThreadRecordingLexiconStore: LexiconStore, @unchecked Sendab
 private actor ControlledPipeline: ChineseInputPipeline {
     private var continuations: [CheckedContinuation<[InputCandidate], Error>] = []
     private var requested: [[ZhuyinInputToken]] = []
+    private var suggestionContinuations: [CheckedContinuation<[String], Error>] = []
+    private var suggestionContexts: [String] = []
 
     func candidates(for tokens: [ZhuyinInputToken], precedingText: String) async throws -> [InputCandidate] {
         requested.append(tokens)
@@ -728,6 +730,20 @@ private actor ControlledPipeline: ChineseInputPipeline {
 
     func requestedCount() -> Int {
         requested.count
+    }
+
+    func suggestions(after precedingText: String) async throws -> [String] {
+        suggestionContexts.append(precedingText)
+        return try await withCheckedThrowingContinuation { continuation in
+            suggestionContinuations.append(continuation)
+        }
+    }
+
+    func suggestionRequestCount() -> Int { suggestionContexts.count }
+
+    func resolveNextSuggestions(with suggestions: [String]) {
+        guard !suggestionContinuations.isEmpty else { return }
+        suggestionContinuations.removeFirst().resume(returning: suggestions)
     }
 
     func resolveNext(with candidates: [InputCandidate]) {
@@ -743,6 +759,48 @@ private actor ControlledPipeline: ChineseInputPipeline {
 
 @MainActor
 final class ChineseInputCoordinatorTests: XCTestCase {
+    func testSuggestionResultIsReplacedByZhuyinRequest() async {
+        let pipeline = ControlledPipeline()
+        let coordinator = ChineseInputCoordinator { pipeline }
+        coordinator.requestSuggestions(after: "天氣")
+        await waitUntil { await pipeline.suggestionRequestCount() == 1 }
+        await pipeline.resolveNextSuggestions(with: ["很好"])
+        await waitUntil { coordinator.suggestions == ["很好"] }
+        XCTAssertEqual(coordinator.items, [.suggestion("很好")])
+
+        coordinator.requestCandidates(for: [.symbol("ㄓ")])
+        XCTAssertTrue(coordinator.suggestions.isEmpty)
+        await waitUntil { await pipeline.requestedCount() == 1 }
+        await pipeline.resolveNext(with: [makeCandidate("之")])
+        await waitUntil { coordinator.candidates.map(\.text) == ["之"] }
+        XCTAssertEqual(coordinator.items.map(\.text), ["之"])
+    }
+
+    func testStaleSuggestionsDoNotReplaceLaterContext() async {
+        let pipeline = ControlledPipeline()
+        let coordinator = ChineseInputCoordinator { pipeline }
+        coordinator.requestSuggestions(after: "天氣")
+        coordinator.requestSuggestions(after: "中文")
+        await waitUntil { await pipeline.suggestionRequestCount() == 2 }
+        await pipeline.resolveNextSuggestions(with: ["很"])
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertTrue(coordinator.suggestions.isEmpty)
+        await pipeline.resolveNextSuggestions(with: ["版"])
+        await waitUntil { coordinator.suggestions == ["版"] }
+    }
+
+    func testInvalidationDropsPendingSuggestions() async {
+        let pipeline = ControlledPipeline()
+        let coordinator = ChineseInputCoordinator { pipeline }
+        coordinator.requestSuggestions(after: "天氣")
+        await waitUntil { await pipeline.suggestionRequestCount() == 1 }
+        coordinator.invalidate()
+        await pipeline.resolveNextSuggestions(with: ["很"])
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertTrue(coordinator.items.isEmpty)
+        XCTAssertEqual(coordinator.state, .idle)
+    }
+
     func testStaleResultDoesNotOverrideNewerRequest() async {
         let pipeline = ControlledPipeline()
         let coordinator = ChineseInputCoordinator { pipeline }
@@ -999,6 +1057,13 @@ final class CandidateViewLayoutTests: XCTestCase {
         XCTAssertGreaterThan(bar.visibleCandidateCount, 0)
         XCTAssertLessThan(collectionView.visibleCells.count, 800)
         XCTAssertLessThanOrEqual(collectionView.visibleCells.count, 40)
+    }
+
+    func testSuggestionHasDistinctAccessibilityText() {
+        let button = CandidateButton(type: .custom)
+        button.update(with: .suggestion("很好"), adjustsTitleToFit: false)
+        XCTAssertEqual(button.accessibilityIdentifier, "suggestion-很好")
+        XCTAssertEqual(button.accessibilityLabel, "建議：很好")
     }
 
     func testCandidateBarCountsEveryCandidateThatFits() {

@@ -21,9 +21,16 @@ final class ChineseInputCoordinator {
     private var task: Task<Void, Never>?
     private var revision = 0
     private var pendingSnapshot: [ZhuyinInputToken] = []
+    private var pendingSuggestionContext = ""
 
     private(set) var state: ChineseInputPipelineState = .idle
     private(set) var candidates: [InputCandidate] = []
+    private(set) var suggestions: [String] = []
+
+    var items: [CandidateItem] {
+        if !suggestions.isEmpty { return suggestions.map(CandidateItem.suggestion) }
+        return candidates.map(CandidateItem.input)
+    }
 
     var onChange: (() -> Void)?
 
@@ -40,6 +47,8 @@ final class ChineseInputCoordinator {
         let requestRevision = revision
         task?.cancel()
         task = nil
+        suggestions = []
+        pendingSuggestionContext = ""
 
         guard !tokens.isEmpty else {
             pendingSnapshot = []
@@ -83,13 +92,66 @@ final class ChineseInputCoordinator {
         }
     }
 
+    func requestSuggestions(after precedingText: String) {
+        revision += 1
+        let requestRevision = revision
+        task?.cancel()
+        task = nil
+        pendingSnapshot = []
+        candidates = []
+        suggestions = []
+        let context = GrammarContext.tail(of: precedingText)
+        pendingSuggestionContext = context
+        guard !context.isEmpty, context.unicodeScalars.last.map({
+            switch $0.value {
+            case 0x3400...0x9FFF, 0xF900...0xFAFF, 0x20000...0x2FA1F: true
+            default: false
+            }
+        }) == true else {
+            state = .idle
+            notify()
+            return
+        }
+        guard !pipelineUnavailable else {
+            state = .idle
+            notify()
+            return
+        }
+        let pipeline: any ChineseInputPipeline
+        do {
+            pipeline = try resolvedPipeline()
+        } catch {
+            pipelineUnavailable = true
+            state = .idle
+            logFailure(.pipelineUnavailable)
+            notify()
+            return
+        }
+        state = .loading
+        notify()
+        task = Task { [weak self] in
+            let result = (try? await pipeline.suggestions(after: context)) ?? []
+            guard !Task.isCancelled else { return }
+            self?.applySuggestions(result, requestRevision: requestRevision, context: context)
+        }
+    }
+
     func invalidate() {
         revision += 1
         task?.cancel()
         task = nil
         pendingSnapshot = []
+        pendingSuggestionContext = ""
         candidates = []
+        suggestions = []
         state = .idle
+        notify()
+    }
+
+    private func applySuggestions(_ result: [String], requestRevision: Int, context: String) {
+        guard requestRevision == revision, pendingSuggestionContext == context else { return }
+        suggestions = result
+        state = .ready
         notify()
     }
 

@@ -14,8 +14,8 @@ enum CandidateMetrics {
 final class CandidateCell: UICollectionViewCell {
     static let reuseIdentifier = "CandidateCell"
 
-    private(set) var candidate: InputCandidate?
-    private var onSelect: ((InputCandidate) -> Void)?
+    private(set) var candidate: CandidateItem?
+    private var onSelect: ((CandidateItem) -> Void)?
     private let button = CandidateButton(type: .custom)
 
     override init(frame: CGRect) {
@@ -43,9 +43,9 @@ final class CandidateCell: UICollectionViewCell {
     }
 
     func configure(
-        with candidate: InputCandidate,
+        with candidate: CandidateItem,
         adjustsTitleToFit: Bool,
-        onSelect: @escaping (InputCandidate) -> Void
+        onSelect: @escaping (CandidateItem) -> Void
     ) {
         self.candidate = candidate
         self.onSelect = onSelect
@@ -54,7 +54,7 @@ final class CandidateCell: UICollectionViewCell {
 }
 
 final class CandidateBarView: UIView, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
-    var onSelect: ((InputCandidate) -> Void)?
+    var onSelect: ((CandidateItem) -> Void)?
     var onToggleExpansion: (() -> Void)?
     var onVisibleCandidatesChanged: ((Int) -> Void)?
 
@@ -63,7 +63,7 @@ final class CandidateBarView: UIView, UICollectionViewDataSource, UICollectionVi
     private var isTransitioningExpansion = false
     private var isAdjustingLayout = false
     private var hasCandidates = false
-    private var candidates: [InputCandidate] = []
+    private var candidates: [CandidateItem] = []
     private var widthCache: [String: CGFloat] = [:]
 
     static let animationDuration: TimeInterval = 0.25
@@ -130,7 +130,7 @@ final class CandidateBarView: UIView, UICollectionViewDataSource, UICollectionVi
             right: 0
         )
         expandButton.accessibilityIdentifier = "candidate-expand-toggle"
-        expandButton.accessibilityLabel = "展開候選字"
+        expandButton.accessibilityLabel = "展開候選字詞"
         expandButton.isEnabled = false
         expandButton.alpha = 0.4
         expandButton.isHidden = true
@@ -178,6 +178,10 @@ final class CandidateBarView: UIView, UICollectionViewDataSource, UICollectionVi
     }
 
     func update(with candidates: [InputCandidate]) {
+        update(with: candidates.map(CandidateItem.input))
+    }
+
+    func update(with candidates: [CandidateItem]) {
         guard candidates != self.candidates else { return }
         self.candidates = candidates
         UIView.performWithoutAnimation {
@@ -215,7 +219,7 @@ final class CandidateBarView: UIView, UICollectionViewDataSource, UICollectionVi
             ),
             for: .normal
         )
-        expandButton.accessibilityLabel = expanded ? "收合候選字" : "展開候選字"
+        expandButton.accessibilityLabel = expanded ? "收合候選字詞" : "展開候選字詞"
         dividerView.isHidden = expanded || !hasCandidates
         collectionView.isScrollEnabled = !expanded
         collectionView.setContentOffset(.zero, animated: false)
@@ -397,7 +401,7 @@ final class CandidateBarView: UIView, UICollectionViewDataSource, UICollectionVi
 }
 
 final class CandidateButton: UIButton {
-    func update(with candidate: InputCandidate, adjustsTitleToFit: Bool) {
+    func update(with candidate: CandidateItem, adjustsTitleToFit: Bool) {
         configuration = nil
         setTitle(candidate.text, for: .normal)
         setTitleColor(.label, for: .normal)
@@ -406,8 +410,8 @@ final class CandidateButton: UIButton {
         titleLabel?.adjustsFontSizeToFitWidth = adjustsTitleToFit
         titleLabel?.minimumScaleFactor = adjustsTitleToFit ? 0.6 : 1
         titleLabel?.lineBreakMode = .byClipping
-        accessibilityIdentifier = candidate.id.accessibilityIdentifier
-        accessibilityLabel = candidate.text
+        accessibilityIdentifier = candidate.accessibilityIdentifier
+        accessibilityLabel = candidate.accessibilityLabel
     }
 
     override var isHighlighted: Bool {

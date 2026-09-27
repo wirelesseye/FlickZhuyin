@@ -164,6 +164,11 @@ struct KeyboardEngine: Sendable {
         return update
     }
 
+    func selectSuggestion(_ text: String) -> KeyboardUpdate {
+        guard mode == .zhuyin, composition.isEmpty, !text.isEmpty else { return .none }
+        return KeyboardUpdate(documentEffects: [.insertText(text)], invalidatesCandidates: true)
+    }
+
     mutating func resetComposition() -> KeyboardUpdate {
         guard !composition.isEmpty else { return .none }
         composition = ZhuyinComposition()

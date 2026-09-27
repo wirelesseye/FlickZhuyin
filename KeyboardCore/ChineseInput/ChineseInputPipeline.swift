@@ -5,12 +5,15 @@ protocol ChineseInputPipeline: Sendable {
     /// `precedingText` is committed text immediately left of the input, used
     /// as grammar context. It is never stored.
     func candidates(for tokens: [ZhuyinInputToken], precedingText: String) async throws -> [InputCandidate]
+    func suggestions(after precedingText: String) async throws -> [String]
 }
 
 extension ChineseInputPipeline {
     func candidates(for tokens: [ZhuyinInputToken]) async throws -> [InputCandidate] {
         try await candidates(for: tokens, precedingText: "")
     }
+
+    func suggestions(after precedingText: String) async throws -> [String] { [] }
 }
 
 final class LexiconChineseInputPipeline: ChineseInputPipeline, @unchecked Sendable {
@@ -75,6 +78,15 @@ final class LexiconChineseInputPipeline: ChineseInputPipeline, @unchecked Sendab
                 } catch {
                     continuation.resume(throwing: error)
                 }
+            }
+        }
+    }
+
+    func suggestions(after precedingText: String) async throws -> [String] {
+        guard let grammar = decoder.grammar as? OctagramGrammar else { return [] }
+        return await withCheckedContinuation { continuation in
+            queue.async {
+                continuation.resume(returning: grammar.suggestions(after: precedingText))
             }
         }
     }

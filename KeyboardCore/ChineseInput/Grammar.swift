@@ -57,6 +57,43 @@ struct OctagramGrammar: GrammarModel {
         OctagramContextScorer(grammar: self, context: context)
     }
 
+    func suggestions(after text: String, limit: Int = 12) -> [String] {
+        guard limit > 0 else { return [] }
+        let context = Array(text.unicodeScalars.reversed().prefix(while: Self.isHan).prefix(3))
+        guard !context.isEmpty else { return [] }
+        let characters = Array(String(String.UnicodeScalarView(context.reversed())))
+        var result: [String] = []
+        var seen: Set<String> = []
+        for length in stride(from: characters.count, through: 1, by: -1) {
+            let prefix = String(characters.suffix(length))
+            var matches: [(text: String, value: Int)] = []
+            store.forEachEntry(withPrefix: prefix) { key, value in
+                guard !Task.isCancelled else { return }
+                let continuation = String(key.dropFirst(length))
+                let scalars = Array(continuation.unicodeScalars)
+                guard (1...min(3, 4 - length)).contains(scalars.count),
+                      scalars.allSatisfy(Self.isHan)
+                else { return }
+                matches.append((continuation, value))
+            }
+            matches.sort { lhs, rhs in
+                lhs.value == rhs.value ? lhs.text < rhs.text : lhs.value > rhs.value
+            }
+            for match in matches where seen.insert(match.text).inserted {
+                result.append(match.text)
+                if result.count == limit { return result }
+            }
+        }
+        return result
+    }
+
+    private static func isHan(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.value {
+        case 0x3400...0x9FFF, 0xF900...0xFAFF, 0x20000...0x2FA1F: true
+        default: false
+        }
+    }
+
     fileprivate static func scaled(_ value: Int) -> Double {
         Double(value) / valueScale
     }

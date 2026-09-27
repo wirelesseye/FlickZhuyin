@@ -35,6 +35,17 @@ final class MappedGramStoreTests: XCTestCase {
         XCTAssertEqual(store.lookup(Array("天空".utf8)), .init(value: nil, hasExtensions: false))
     }
 
+    func testEnumeratesPrefixAcrossBlocks() throws {
+        let store = try MappedGramStore(url: try fixtureGramURL(for: self))
+        var entries: [(String, Int)] = []
+        store.forEachEntry(withPrefix: "天氣") { entries.append(($0, $1)) }
+        XCTAssertEqual(entries.map(\.0), ["天氣很", "天氣很好"])
+        XCTAssertEqual(entries.map(\.1), [110235, 102271])
+        entries = []
+        store.forEachEntry(withPrefix: "不存在") { entries.append(($0, $1)) }
+        XCTAssertTrue(entries.isEmpty)
+    }
+
     func testRejectsInvalidFiles() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -91,6 +102,16 @@ final class OctagramGrammarTests: XCTestCase {
         XCTAssertEqual(grammar.query(context: "", word: "的", isRear: true), -12)
         XCTAssertEqual(grammar.query(context: "天氣", word: "", isRear: false), -12)
         XCTAssertEqual(grammar.query(context: "天空", word: "很好", isRear: false), -12)
+    }
+
+    func testSuggestionsPreferLongerContextAndFilterBoundaries() throws {
+        let grammar = try grammar()
+        XCTAssertEqual(Array(grammar.suggestions(after: "天氣").prefix(2)), ["很", "很好"])
+        XCTAssertEqual(Array(grammar.suggestions(after: "今天天氣").prefix(2)), ["很", "很好"])
+        XCTAssertEqual(grammar.suggestions(after: "天氣。"), [])
+        XCTAssertEqual(grammar.suggestions(after: "天氣A"), [])
+        XCTAssertEqual(grammar.suggestions(after: "中", limit: 1), ["文"])
+        XCTAssertEqual(grammar.suggestions(after: "你好"), [])
     }
 }
 

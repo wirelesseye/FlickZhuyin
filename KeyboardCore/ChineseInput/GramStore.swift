@@ -148,6 +148,58 @@ final class MappedGramStore: @unchecked Sendable {
         lookup(Array(key.utf8)).value
     }
 
+    /// Visits keys beginning with `prefix` in byte order without materializing
+    /// the matching part of the mapped file.
+    func forEachEntry(withPrefix prefix: String, _ body: (String, Int) -> Void) {
+        let target = Array(prefix.utf8)
+        guard !target.isEmpty else { return }
+        let firstBlock = target.withUnsafeBufferPointer { buffer -> Int in
+            let targetPrefix = Self.prefix(of: buffer)
+            var low = 0
+            var high = blockCount
+            while low < high {
+                let middle = (low + high) / 2
+                let blockPrefix = UInt64(littleEndian: blockPrefixes[middle])
+                let before = blockPrefix != targetPrefix
+                    ? blockPrefix < targetPrefix
+                    : compare(firstKeyOf: middle, buffer) <= 0
+                if before { low = middle + 1 } else { high = middle }
+            }
+            return max(0, low - 1)
+        }
+        for block in firstBlock..<blockCount {
+            var (position, end) = blockRange(block)
+            var key: [UInt8] = []
+            key.reserveCapacity(64)
+            var index = 0
+            while position < end {
+                if index == 0 {
+                    let length = Int(blocks[position])
+                    guard position + 1 + length <= end else { return }
+                    key.append(contentsOf: UnsafeBufferPointer(start: blocks + position + 1, count: length))
+                    position += 1 + length
+                } else {
+                    guard position + 2 <= end else { return }
+                    let shared = Int(blocks[position])
+                    let suffix = Int(blocks[position + 1])
+                    guard shared <= key.count, position + 2 + suffix <= end else { return }
+                    key.removeSubrange(shared...)
+                    key.append(contentsOf: UnsafeBufferPointer(start: blocks + position + 2, count: suffix))
+                    position += 2 + suffix
+                }
+                if key.starts(with: target) {
+                    if let text = String(bytes: key, encoding: .utf8),
+                       let value = decodedValue(at: block * blockSize + index) {
+                        body(text, value)
+                    }
+                } else if key.lexicographicallyPrecedes(target) == false {
+                    return
+                }
+                index += 1
+            }
+        }
+    }
+
     /// Looks up `key` (UTF-8) and reports whether any longer key extends it.
     func lookup(_ key: [UInt8]) -> LookupResult {
         guard !key.isEmpty else { return LookupResult(value: nil, hasExtensions: true) }

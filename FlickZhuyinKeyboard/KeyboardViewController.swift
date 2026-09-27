@@ -16,6 +16,7 @@ final class KeyboardViewController: UIInputViewController {
     private var documentEffectDepth = 0
     private var documentHasMarkedText = false
     private var documentContextBeforeComposition = ""
+    private var expectedSuggestionContext: String?
     private var showsDirectionalSymbols = KeyboardSettings.showsDirectionalSymbols
 
     private var coordinator: ChineseInputCoordinator?
@@ -403,23 +404,49 @@ final class KeyboardViewController: UIInputViewController {
 
     private func handle(_ key: KeyboardKey) {
         let oldMode = engine.mode
-        apply(engine.update(for: key))
+        let update = engine.update(for: key)
+        apply(update)
+        if key == .return, oldMode == .zhuyin,
+           case let .insertText(text)? = update.documentEffects.first,
+           update.invalidatesCandidates {
+            requestPostCommitSuggestions(for: text)
+        }
         if engine.mode != oldMode {
+            coordinator?.invalidate()
+            expectedSuggestionContext = nil
             rebuildKeyboard()
         } else {
             refreshUI()
         }
     }
 
-    private func select(_ candidate: InputCandidate) {
+    private func select(_ item: CandidateItem) {
         setCandidateListExpanded(false)
-        apply(
-            engine.selectCandidate(
+        switch item {
+        case let .input(candidate):
+            let update = engine.selectCandidate(
                 candidate,
                 autoCommit: KeyboardSettings.autoCommitComposition
             )
-        )
+            apply(update)
+            if case let .insertText(text)? = update.documentEffects.first,
+               update.invalidatesCandidates {
+                requestPostCommitSuggestions(for: text)
+            }
+        case let .suggestion(text):
+            let update = engine.selectSuggestion(text)
+            guard !update.documentEffects.isEmpty else { return }
+            apply(update)
+            requestPostCommitSuggestions(for: text)
+        }
         refreshUI()
+    }
+
+    private func requestPostCommitSuggestions(for text: String) {
+        guard engine.mode == .zhuyin else { return }
+        let context = GrammarContext.tail(of: documentContextBeforeComposition + text)
+        expectedSuggestionContext = context
+        resolvedCoordinator().requestSuggestions(after: context)
     }
 
     private func toggleCandidateExpansion() {
@@ -461,8 +488,15 @@ final class KeyboardViewController: UIInputViewController {
         documentHasMarkedText = engine.hasMarkedText
         if update.invalidatesCandidates {
             coordinator?.invalidate()
+            expectedSuggestionContext = nil
+        } else if update.candidateRequest == nil,
+                  !engine.hasMarkedText,
+                  !update.documentEffects.isEmpty {
+            coordinator?.invalidate()
+            expectedSuggestionContext = nil
         }
         if let request = update.candidateRequest {
+            expectedSuggestionContext = nil
             let precedingText = request.continuesDocument
                 ? documentContextBeforeComposition + request.precedingText
                 : request.precedingText
@@ -475,8 +509,17 @@ final class KeyboardViewController: UIInputViewController {
 
     private func handleHostDocumentChange() {
         guard documentEffectDepth == 0 else { return }
-        guard !engine.composition.isEmpty else { return }
-        resetComposition()
+        if engine.composition.isEmpty {
+            if let expectedSuggestionContext,
+               GrammarContext.tail(of: textDocumentProxy.documentContextBeforeInput)
+                == expectedSuggestionContext {
+                return
+            }
+            coordinator?.invalidate()
+            expectedSuggestionContext = nil
+        } else {
+            resetComposition()
+        }
     }
 
     private func resetComposition() {
@@ -485,7 +528,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func refreshCandidates() {
-        let candidates = coordinator?.candidates ?? []
+        let candidates = coordinator?.items ?? []
         candidateBar?.update(with: candidates)
         refreshExpandedCandidates()
         if candidates.isEmpty {
@@ -495,7 +538,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func refreshExpandedCandidates() {
         guard isCandidateListExpanded else { return }
-        let candidates = coordinator?.candidates ?? []
+        let candidates = coordinator?.items ?? []
         let visibleCount = candidateBar?.visibleCandidateCount ?? 0
         let start = min(visibleCount, candidates.count)
         expandedCandidatesView?.update(with: Array(candidates.dropFirst(start)))

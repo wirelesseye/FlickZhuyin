@@ -69,3 +69,29 @@ struct InputCandidate: Equatable, Identifiable, Sendable {
         )
     }
 }
+
+enum CandidateItem: Equatable, Sendable {
+    case input(InputCandidate)
+    case suggestion(String)
+
+    var text: String {
+        switch self {
+        case let .input(candidate): candidate.text
+        case let .suggestion(text): text
+        }
+    }
+
+    var accessibilityIdentifier: String {
+        switch self {
+        case let .input(candidate): candidate.id.accessibilityIdentifier
+        case let .suggestion(text): "suggestion-\(text)"
+        }
+    }
+
+    var accessibilityLabel: String {
+        switch self {
+        case let .input(candidate): candidate.text
+        case let .suggestion(text): "建議：\(text)"
+        }
+    }
+}

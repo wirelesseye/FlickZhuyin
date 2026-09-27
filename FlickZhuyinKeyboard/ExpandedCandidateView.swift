@@ -3,13 +3,13 @@ import UIKit
 final class ExpandedCandidateView: UIView, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
     static let contentInset: CGFloat = 4
 
-    var onSelect: ((InputCandidate) -> Void)?
+    var onSelect: ((CandidateItem) -> Void)?
 
     private static let spacing: CGFloat = 7
 
     private let flowLayout = UICollectionViewFlowLayout()
     private lazy var collectionView = UICollectionView(frame: .zero, collectionViewLayout: flowLayout)
-    private var candidates: [InputCandidate] = []
+    private var candidates: [CandidateItem] = []
     private var widthCache: [String: CGFloat] = [:]
     private var lastLayoutWidth: CGFloat = 0
 
@@ -60,6 +60,10 @@ final class ExpandedCandidateView: UIView, UICollectionViewDataSource, UICollect
     }
 
     func update(with candidates: [InputCandidate]) {
+        update(with: candidates.map(CandidateItem.input))
+    }
+
+    func update(with candidates: [CandidateItem]) {
         self.candidates = candidates
         collectionView.reloadData()
     }
